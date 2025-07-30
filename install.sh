@@ -8,7 +8,6 @@ fi
 
 # alacritty/.config/alacritty
 FOLDERS="
-bin/bin
 home/
 claude/.claude
 "
