@@ -1,0 +1,3 @@
+# BASIC ALIASES
+
+alias claude-session='export CLAUDE_SESSION_ID=$(uuidgen) && claude --session-id $CLAUDE_SESSION_ID'
