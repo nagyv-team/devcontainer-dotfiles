@@ -1,4 +1,4 @@
 #!/bin/bash
 
-./bin/install.sh
-./bin/direnv_setup.sh
+bash ./bin/install.sh
+bash ./bin/direnv_setup.sh
