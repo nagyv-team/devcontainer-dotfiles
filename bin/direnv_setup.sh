@@ -2,7 +2,7 @@
 
 if command -v direnv &> /dev/null; then
     echo "direnv not found"
-    exit(0)
+    exit 0
 fi
 
 echo "Direnv: Updating /etc/bash.bashrc and /etc/zsh/zshrc..."
