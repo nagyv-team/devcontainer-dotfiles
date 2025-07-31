@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if command -v direnv &> /dev/null; then
+if ! command -v direnv &> /dev/null; then
     echo "direnv not found"
     exit 0
 fi
