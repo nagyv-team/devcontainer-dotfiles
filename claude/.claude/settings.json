@@ -9,6 +9,17 @@
           }
         ]
       }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r .message | say"
+          }
+        ]
+      }
     ]
   }
 }
