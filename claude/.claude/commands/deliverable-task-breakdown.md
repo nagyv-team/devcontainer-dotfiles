@@ -9,7 +9,7 @@ The implementation plan should have the issue broken down into small deliverable
 - There should be one PR to merge the main work branch to the default branch
 - There should be one PR per task to merge the task branch to the main work branch
 
-<example content>
+<example-content>
 ## Detailed Implementation Plan
 
 **Main work branch**: issue-109
@@ -26,17 +26,17 @@ This issue is broken down into X small deliverable pieces that can each be revie
    - Add a comment describing the object's intent
    - Mark the comment as `TODO for task X` where X is the task number to write the body of the object
 
-   <example new object>
+   <example-new-object>
    function calculateRectangleArea(length: number, width: number) -> number:
        // TODO for task 3: This function calculates the area of a rectangle
        return 1
    end function
-   </example new object>
+   </example-new-object>
 
 - Add a TODO comment (`TODO for task X`) to every class, method, function call that needs to be modified with details about the needed modification.
-   <example comment>
+   <example-comment>
    // TODO for task 2: refactor to use the new get_admin_user
-   </example comment>
+   </example-comment>
 - Do NOT write any tests at this stage
 
 #### Files to create/modify:
@@ -89,4 +89,4 @@ Needs to fix every `TODO for task 1` prefixed codebase. This might include new o
 
 ### Task 3: ...
 
-</example content>
+</example-content>
