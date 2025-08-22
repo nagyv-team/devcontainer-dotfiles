@@ -31,7 +31,7 @@ This issue is broken down into X small deliverable pieces that can each be revie
        // TODO for task 3: This function calculates the area of a rectangle
        return 1
    end function
-   </example>
+   </example new object>
 
 - Add a TODO comment (`TODO for task X`) to every class, method, function call that needs to be modified with details about the needed modification.
    <example comment>
