@@ -12,7 +12,7 @@ The implementation plan should have the issue broken down into small deliverable
 <example-content>
 ## Detailed Implementation Plan
 
-**Main work branch**: issue-109
+**Main work branch**: `issue-109`
 
 - After task 1, all subsequent tasks should branch of off the main work branch
 - After task 1, all subsequent tasks should open PRs to the main work branch
@@ -56,7 +56,7 @@ This issue is broken down into X small deliverable pieces that can each be revie
  
 ### Task 2: Admin Role Authorization Foundation
 
-**Branch**: issue-109-task-1-admin-auth
+**Branch**: `issue-109-task-1-admin-auth`
 **Estimated Time**: 4-6 hours
 
 **Objective**: ...
