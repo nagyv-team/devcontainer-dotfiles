@@ -48,7 +48,7 @@ This ensures the generated command will properly use Claude Code's argument subs
 - **Context**: Issue summary and task breakdown with branch/PR mapping
 - **Technical Implementation Details**: Framework-specific architecture and patterns
 - **Key Code Patterns**: Language/framework-specific code examples
-- **Workflow**: 9-step process from PR analysis to final validation
+- **Workflow**: 10-step process from PR analysis to final validation
 - **Environment Setup**: Tool-specific commands and directory structure
 - **Important Constraints**: Scope limitations and quality requirements
 
@@ -64,7 +64,7 @@ Write the generated command to:
 
 ### 6. Validation
 Ensure the generated command includes:
-- Complete workflow with all 9 steps
+- Complete workflow with all 10 steps
 - Proper use of `<DOLLAR_ARGUMENTS>` for PR number input (replace <DOLLAR_ARGUMENTS> with the dollar sign followed by ARGUMENTS)
 - Technology-specific testing and quality check commands
 - Branch mapping for all tasks identified in the issue
@@ -95,6 +95,7 @@ The factory will generate commands similar to existing patterns:
 7. Additional Steps - localization, etc. (if needed)
 8. Git Operations - commit and push
 9. Final Validation - verify all requirements met
+10. Feedback - add an emoji to the addressed PR comment
 
 ## Environment Setup
 - Tool-specific commands and setup
