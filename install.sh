@@ -9,3 +9,9 @@ curl -fsSL https://raw.githubusercontent.com/ericbuess/claude-code-docs/main/ins
 curl -fsSL https://raw.githubusercontent.com/ericbuess/claude-code-project-index/main/install.sh | bash
 
 git config --global core.excludesfile ~/.gitignore
+
+# Initialize virtualenv
+python -m venv ~/.venv_dotfiles
+source ~/.venv_dotfiles/bin/activate
+pip install -r requirements.txt
+deactivate

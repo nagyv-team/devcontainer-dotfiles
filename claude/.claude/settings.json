@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/scripts/save_user_prompt.py || (echo \"Add 'save_user_prompt.py' to 'project/bin' directory from https://github.com/nagyv/claude-commands\" >&2 && exit 1)"
+            "command": "${HOME}/.venv_dotfiles/bin/python ${HOME}/.claude/scripts/save_user_prompt.py"
           }
         ]
       }
