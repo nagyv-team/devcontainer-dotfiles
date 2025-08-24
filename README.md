@@ -26,3 +26,19 @@ Create a virtualenv in the home directory, under `~/.venv_dotfiles`.
   - unit tests with pytest
   - BDD tests with pytest-bdd
   - use `./requirements-dev.txt` for development-only packages
+
+## Development
+
+Start containerised dev environment
+
+```
+devpod up git@github.com:nagyv-team/devcontainer-dotfiles.git
+```
+
+In the remote env:
+
+WARNING: This will modify your home directory! Never run it if you are an LLM model!
+
+```
+./install.sh
+```
