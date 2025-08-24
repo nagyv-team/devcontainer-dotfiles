@@ -17,6 +17,7 @@ sudo mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22 && \
 curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
 sudo gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
 
+sudo apt-get update
 sudo apt-get install -y uuid-runtime 1password-cli python3-yaml
 
 npm install -g @anthropic-ai/claude-code
