@@ -665,25 +665,52 @@ class TestCLISupport:
                         mock_logger.setLevel.assert_called_with(logging.DEBUG)
                         mock_handler.setLevel.assert_called_with(logging.DEBUG)
     
-    def test_hook_mode_vs_standalone(self):
-        """Test difference between hook mode and standalone execution."""
-        # Hook mode (no arguments, uses environment)
+    def test_stdin_empty(self):
+        """Test when stdin is empty."""
         with patch.dict(os.environ, {
             'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
-            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat',
-            'CLAUDE_TRANSCRIPT_PATH': '/tmp/transcript.jsonl'
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
         }):
             with patch('sys.argv', ['telegram_notify.py']):
-                with patch('telegram_notify.parse_claude_transcript') as mock_parse:
-                    mock_parse.return_value = "Hook message"
-                    with patch('telegram_notify.send_telegram_notification') as mock_send:
-                        mock_send.return_value = True
-                        
-                        result = main()
-                        assert result == 0
-                        # Check that parse was called with the transcript path
-                        assert mock_parse.called
-                        assert mock_parse.call_args[0][0] == '/tmp/transcript.jsonl'
+                with patch('sys.stdin') as mock_stdin:
+                    mock_stdin.read.return_value = ''
+                    
+                    result = main()
+                    assert result == 1  # Should fail when stdin is empty
+    
+    def test_stdin_error(self):
+        """Test when reading from stdin fails."""
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py']):
+                with patch('sys.stdin') as mock_stdin:
+                    mock_stdin.read.side_effect = Exception("Cannot read stdin")
+                    
+                    result = main()
+                    assert result == 1  # Should fail gracefully
+    
+    def test_hook_mode_vs_standalone(self):
+        """Test difference between hook mode and standalone execution."""
+        # Hook mode (no arguments, reads from stdin)
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py']):
+                with patch('sys.stdin') as mock_stdin:
+                    mock_stdin.read.return_value = '/tmp/transcript.jsonl'
+                    with patch('telegram_notify.parse_claude_transcript') as mock_parse:
+                        mock_parse.return_value = "Hook message"
+                        with patch('telegram_notify.send_telegram_notification') as mock_send:
+                            mock_send.return_value = True
+                            
+                            result = main()
+                            assert result == 0
+                            # Check that parse was called with the transcript path from stdin
+                            assert mock_parse.called
+                            assert mock_parse.call_args[0][0] == '/tmp/transcript.jsonl'
         
         # Standalone mode (with explicit arguments)
         with patch.dict(os.environ, {

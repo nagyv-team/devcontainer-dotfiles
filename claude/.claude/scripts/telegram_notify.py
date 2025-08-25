@@ -360,7 +360,7 @@ Usage:
     parser.add_argument(
         '--transcript',
         type=str,
-        help='Path to Claude transcript JSONL file (overrides CLAUDE_TRANSCRIPT_PATH)'
+        help='Path to Claude transcript JSONL file (overrides stdin input)'
     )
     
     parser.add_argument(
@@ -407,24 +407,26 @@ Usage:
         else:
             # Determine transcript file path
             if args.transcript:
+                # Use explicit transcript path from command line
                 transcript_file = args.transcript
                 logger.info(f"Using transcript file from command line: {transcript_file}")
+                # Parse the transcript from file
+                message_text = parse_claude_transcript(transcript_file, logger)
             else:
-                # Try to get from environment or use default
-                transcript_file = os.environ.get('CLAUDE_TRANSCRIPT_PATH')
-                if not transcript_file:
-                    # Use default Claude Code transcript location
-                    home_dir = os.path.expanduser('~')
-                    transcript_file = os.path.join(
-                        home_dir,
-                        '.claude',
-                        'transcripts',
-                        'current.jsonl'
-                    )
-                logger.info(f"Using transcript file: {transcript_file}")
-            
-            # Parse the transcript
-            message_text = parse_claude_transcript(transcript_file, logger)
+                # Read transcript path from stdin (default for Claude Code hooks)
+                logger.info("Reading transcript path from stdin")
+                try:
+                    transcript_file = sys.stdin.read().strip()
+                    if transcript_file:
+                        logger.info(f"Using transcript file from stdin: {transcript_file}")
+                        # Parse the transcript from file
+                        message_text = parse_claude_transcript(transcript_file, logger)
+                    else:
+                        logger.warning("No transcript path received from stdin. Exiting.")
+                        return 1
+                except Exception as e:
+                    logger.error(f"Error reading from stdin: {e}")
+                    return 1
             if not message_text:
                 logger.warning("No assistant message found in transcript. Exiting.")
                 return 1
