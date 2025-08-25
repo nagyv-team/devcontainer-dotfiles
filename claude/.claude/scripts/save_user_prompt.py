@@ -10,7 +10,6 @@ import logging
 import subprocess
 import re
 from datetime import datetime
-import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -33,10 +32,10 @@ def get_postgres_connection():
     """
     try:
         import psycopg
-        
+
         # Check for DSN first (takes precedence)
         dsn = os.getenv('CLAUDE_POSTGRES_SERVER_DSN')
-        
+
         if dsn:
             logger.debug("Attempting PostgreSQL connection using DSN")
             # Ensure SSL is required
@@ -45,22 +44,23 @@ def get_postgres_connection():
             conn = psycopg.connect(dsn, connect_timeout=5)
             logger.info("Successfully connected to PostgreSQL using DSN")
             return conn
-        
+
         # Fall back to individual environment variables
         host_port = os.getenv('CLAUDE_POSTGRES_SERVER_HOST_PORT')
         user = os.getenv('CLAUDE_POSTGRES_SERVER_USER')
         password = os.getenv('CLAUDE_POSTGRES_SERVER_PASS')
         db_name = os.getenv('CLAUDE_POSTGRES_SERVER_DB_NAME')
-        
+
         if host_port and user and password and db_name:
-            logger.debug("Attempting PostgreSQL connection using individual environment variables")
+            logger.debug(
+                "Attempting PostgreSQL connection using individual environment variables")
             # Parse host and port
             if ':' in host_port:
                 host, port = host_port.split(':', 1)
             else:
                 host = host_port
                 port = '5432'  # Default PostgreSQL port
-            
+
             # Build connection string
             conn_string = (
                 f"host={host} "
@@ -71,16 +71,19 @@ def get_postgres_connection():
                 f"sslmode=require "
                 f"connect_timeout=5"
             )
-            
+
             conn = psycopg.connect(conn_string)
-            logger.info("Successfully connected to PostgreSQL using individual environment variables")
+            logger.info(
+                "Successfully connected to PostgreSQL using individual environment variables")
             return conn
-        
-        logger.debug("No PostgreSQL configuration found in environment variables")
+
+        logger.debug(
+            "No PostgreSQL configuration found in environment variables")
         return None
-        
+
     except ImportError:
-        logger.warning("psycopg module not installed, PostgreSQL support unavailable")
+        logger.warning(
+            "psycopg module not installed, PostgreSQL support unavailable")
         return None
     except Exception as e:
         logger.warning(f"Failed to connect to PostgreSQL: {e}")
@@ -96,7 +99,7 @@ def save_to_postgres(connection, prompt_data: Dict[str, Any]) -> bool:
     """
     if not connection:
         return False
-    
+
     try:
         with connection.cursor() as cursor:
             # Prepare the INSERT query with parameterized values
@@ -104,7 +107,7 @@ def save_to_postgres(connection, prompt_data: Dict[str, Any]) -> bool:
                 INSERT INTO user_prompts (created_at, prompt, session_id, repository)
                 VALUES (%s, %s, %s, %s)
             """
-            
+
             # Execute the query with the provided data
             cursor.execute(
                 insert_query,
@@ -115,13 +118,13 @@ def save_to_postgres(connection, prompt_data: Dict[str, Any]) -> bool:
                     prompt_data.get('repository')
                 )
             )
-            
+
             # Commit the transaction
             connection.commit()
-            
+
             logger.info("Successfully saved prompt to PostgreSQL")
             return True
-            
+
     except Exception as e:
         logger.warning(f"Failed to save prompt to PostgreSQL: {e}")
         try:
@@ -143,7 +146,7 @@ def extract_repository_from_git() -> Optional[str]:
     if not project_dir:
         logger.debug("CLAUDE_PROJECT_DIR not set, cannot extract repository")
         return None
-    
+
     try:
         # Run git remote get-url origin in the project directory
         result = subprocess.run(
@@ -153,16 +156,16 @@ def extract_repository_from_git() -> Optional[str]:
             text=True,
             timeout=5
         )
-        
+
         if result.returncode != 0:
             logger.debug(f"Git command failed: {result.stderr}")
             return None
-        
+
         remote_url = result.stdout.strip()
         if not remote_url:
             logger.debug("No origin remote found")
             return None
-        
+
         # Parse various git URL formats
         # SSH format: git@github.com:user/repo.git
         ssh_pattern = r'git@([^:]+):([^/]+)/(.+?)$'
@@ -177,7 +180,7 @@ def extract_repository_from_git() -> Optional[str]:
             repository = f"{host}/{user}/{repo}"
             logger.debug(f"Extracted repository from SSH URL: {repository}")
             return repository
-        
+
         # HTTPS format: https://github.com/user/repo.git or https://github.com/user/repo
         https_pattern = r'https?://([^/]+)/([^/]+)/(.+?)$'
         https_match = re.match(https_pattern, remote_url)
@@ -191,10 +194,10 @@ def extract_repository_from_git() -> Optional[str]:
             repository = f"{host}/{user}/{repo}"
             logger.debug(f"Extracted repository from HTTPS URL: {repository}")
             return repository
-        
+
         logger.debug(f"Could not parse git remote URL: {remote_url}")
         return None
-        
+
     except subprocess.TimeoutExpired:
         logger.debug("Git command timed out")
         return None
@@ -212,11 +215,11 @@ def get_session_id() -> Optional[str]:
     """
     # Check for CLAUDE_SESSION_ID in environment
     session_id = os.getenv('CLAUDE_SESSION_ID')
-    
+
     if not session_id:
         logger.debug("No session ID found in environment")
         return None
-    
+
     # Validate UUID format (UUID v4)
     uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
     if re.match(uuid_pattern, session_id.lower()):
@@ -231,6 +234,8 @@ def save_to_yaml(yaml_file: Path, timestamp: str, user_prompt: str, session_id: 
     """
     Save prompt to YAML file (existing functionality refactored)
     """
+    import yaml
+
     # Load existing data or create new structure
     if yaml_file.exists():
         try:
@@ -280,7 +285,7 @@ def main():
     # Generate timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     created_at = datetime.now()
-    
+
     # Check if PostgreSQL configuration exists
     has_postgres_config = any([
         os.getenv('CLAUDE_POSTGRES_SERVER_DSN'),
@@ -291,15 +296,16 @@ def main():
             os.getenv('CLAUDE_POSTGRES_SERVER_DB_NAME')
         ])
     ])
-    
+
     saved_successfully = False
-    
+
     if has_postgres_config:
-        logger.info("PostgreSQL configuration detected, attempting database storage")
-        
+        logger.info(
+            "PostgreSQL configuration detected, attempting database storage")
+
         # Try PostgreSQL storage
         connection = get_postgres_connection()
-        
+
         if connection:
             # Prepare prompt data
             prompt_data = {
@@ -308,31 +314,33 @@ def main():
                 'session_id': get_session_id(),
                 'repository': extract_repository_from_git()
             }
-            
+
             # Attempt to save to PostgreSQL
             if save_to_postgres(connection, prompt_data):
                 saved_successfully = True
                 logger.info("Successfully saved prompt to PostgreSQL")
             else:
-                logger.warning("Failed to save to PostgreSQL, falling back to YAML")
-            
+                logger.warning(
+                    "Failed to save to PostgreSQL, falling back to YAML")
+
             # Close the connection
             try:
                 connection.close()
             except:
                 pass
         else:
-            logger.warning("Could not establish PostgreSQL connection, falling back to YAML")
+            logger.warning(
+                "Could not establish PostgreSQL connection, falling back to YAML")
     else:
         logger.info("No PostgreSQL configuration found, using YAML storage")
-    
+
     # Fall back to YAML if PostgreSQL failed or wasn't configured
     if not saved_successfully:
         yaml_file = Path(os.getenv("CLAUDE_PROJECT_DIR"), "user_prompts.yaml")
-        
+
         # Get session_id for YAML storage (might be different from PostgreSQL logic)
         session_id = get_session_id() or os.getenv("CLAUDE_SESSION_ID", "")
-        
+
         if save_to_yaml(yaml_file, timestamp, user_prompt, session_id):
             logger.info(f"Prompt saved to YAML: {yaml_file}")
         else:
