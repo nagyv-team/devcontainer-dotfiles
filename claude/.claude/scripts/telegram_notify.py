@@ -24,6 +24,7 @@ import logging
 import argparse
 from datetime import datetime
 from typing import Optional, Dict, Any
+import requests
 
 
 def setup_logging() -> logging.Logger:
@@ -50,13 +51,17 @@ def get_environment_config() -> Optional[Dict[str, str]]:
     
     Returns:
         Dict with bot_id and chat_id if both are present, None otherwise
-    
-    TODO for task 1: Implement environment configuration
-    - Check for CLAUDE_TELEGRAM_BOT_ID environment variable
-    - Check for CLAUDE_TELEGRAM_CHAT_ID environment variable
-    - Return configuration dict or None if missing
     """
-    pass
+    bot_id = os.environ.get('CLAUDE_TELEGRAM_BOT_ID')
+    chat_id = os.environ.get('CLAUDE_TELEGRAM_CHAT_ID')
+    
+    if not bot_id or not chat_id:
+        return None
+    
+    return {
+        'bot_id': bot_id,
+        'chat_id': chat_id
+    }
 
 
 def parse_claude_transcript(transcript_file: str) -> Optional[str]:
@@ -68,15 +73,40 @@ def parse_claude_transcript(transcript_file: str) -> Optional[str]:
         
     Returns:
         Text content of the last assistant message, or None if not found
-    
-    TODO for task 1: Implement transcript parsing
-    - Read JSONL file line by line
-    - Parse each JSON line
-    - Find last entry with type == "assistant"
-    - Extract text from message.content[0].text path
-    - Handle missing/malformed JSON gracefully
     """
-    pass
+    if not os.path.exists(transcript_file):
+        return None
+    
+    last_assistant_message = None
+    
+    try:
+        with open(transcript_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    entry = json.loads(line)
+                    
+                    # Check if this is an assistant message
+                    if entry.get('type') == 'assistant':
+                        # Navigate to message.content[0].text
+                        message = entry.get('message', {})
+                        content = message.get('content', [])
+                        if content and isinstance(content, list) and len(content) > 0:
+                            first_content = content[0]
+                            if isinstance(first_content, dict) and 'text' in first_content:
+                                last_assistant_message = first_content['text']
+                                
+                except (json.JSONDecodeError, KeyError, TypeError, IndexError):
+                    # Skip malformed lines
+                    continue
+    
+    except (IOError, OSError):
+        return None
+    
+    return last_assistant_message
 
 
 def format_telegram_message(
@@ -94,15 +124,38 @@ def format_telegram_message(
         
     Returns:
         Formatted message string with metadata
-    
-    TODO for task 1: Implement message formatting
-    - Create markdown-formatted message
-    - Include ISO timestamp
-    - Include project directory from CLAUDE_PROJECT_DIR
-    - Include session ID if available
-    - Truncate message if too long (Telegram has 4096 char limit)
     """
-    pass
+    # Get current ISO timestamp
+    timestamp = datetime.now().isoformat()
+    
+    # Build the formatted message
+    parts = []
+    parts.append(f"🤖 *Claude Code Notification*")
+    parts.append(f"")
+    parts.append(f"⏰ *Time:* `{timestamp}`")
+    
+    if project_dir:
+        parts.append(f"📁 *Project:* `{project_dir}`")
+    
+    if session_id:
+        parts.append(f"🔖 *Session:* `{session_id}`")
+    
+    parts.append(f"")
+    parts.append(f"💬 *Message:*")
+    parts.append(f"```")
+    
+    # Calculate available space for message (4096 char limit minus metadata)
+    metadata_length = sum(len(part) for part in parts) + 10  # Extra for newlines and closing ```
+    available_space = 4096 - metadata_length - 50  # Safety margin
+    
+    # Truncate message if needed
+    if len(message_text) > available_space:
+        message_text = message_text[:available_space - 3] + "..."
+    
+    parts.append(message_text)
+    parts.append(f"```")
+    
+    return "\n".join(parts)
 
 
 def send_telegram_notification(
@@ -120,14 +173,31 @@ def send_telegram_notification(
         
     Returns:
         True if successful, False otherwise
-    
-    TODO for task 1: Implement Telegram API integration
-    - Construct Telegram Bot API URL
-    - Send POST request with message
-    - Use markdown parse_mode
-    - Return success/failure status
     """
-    pass
+    # Construct Telegram Bot API URL
+    url = f"https://api.telegram.org/bot{bot_id}/sendMessage"
+    
+    # Prepare the payload
+    payload = {
+        'chat_id': chat_id,
+        'text': message,
+        'parse_mode': 'Markdown'
+    }
+    
+    try:
+        # Send POST request to Telegram API
+        response = requests.post(url, json=payload, timeout=10)
+        
+        # Check if request was successful
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('ok', False)
+        else:
+            return False
+            
+    except Exception:
+        # Handle any network or parsing errors
+        return False
 
 
 def main():

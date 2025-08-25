@@ -1,2 +1,1 @@
-# TODO for task 1: Add requests library for Telegram API
-# requests>=2.31.0
+requests>=2.31.0
