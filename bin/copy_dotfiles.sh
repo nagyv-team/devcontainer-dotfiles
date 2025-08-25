@@ -11,6 +11,7 @@ FOLDERS="
 home/
 bin/bin/
 claude/.claude
+kube/.kube
 "
 
 for i in $FOLDERS; do
