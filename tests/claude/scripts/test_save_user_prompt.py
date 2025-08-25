@@ -13,6 +13,7 @@ import tempfile
 
 # Add parent directory to path to import save_user_prompt
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'claude', '.claude', 'scripts'))
+import save_user_prompt
 from save_user_prompt import (
     get_postgres_connection,
     save_to_postgres,
@@ -202,33 +203,144 @@ class TestSaveUserPrompt:
         # TODO: Test with read-only directory or other error conditions
         pass
 
-    def test_main_execution_flow_postgres_success(self):
-        """
-        TODO for task 4: Test main flow when PostgreSQL is available
-        - Mock stdin with prompt data
-        - Mock PostgreSQL connection success
-        - Mock save_to_postgres success
-        - Verify PostgreSQL path taken
-        - Verify correct log messages
-        """
-        pass
+    @patch.dict(os.environ, {
+        'CLAUDE_POSTGRES_SERVER_DSN': 'postgresql://user:pass@localhost/db',
+        'CLAUDE_PROJECT_DIR': '/test/project'
+    })
+    @patch('save_user_prompt.get_postgres_connection')
+    @patch('save_user_prompt.save_to_postgres')
+    @patch('save_user_prompt.get_session_id')
+    @patch('save_user_prompt.extract_repository_from_git')
+    @patch('sys.stdin')
+    def test_main_execution_flow_postgres_success(self, mock_stdin, mock_extract_repo, 
+                                                   mock_get_session, mock_save_postgres, 
+                                                   mock_get_connection):
+        """Test main flow when PostgreSQL is available"""
+        # Setup mocks
+        mock_stdin.read.return_value = json.dumps({'prompt': 'Test prompt'})
+        mock_stdin.buffer = Mock()
+        mock_stdin.buffer.read.return_value = json.dumps({'prompt': 'Test prompt'}).encode()
+        
+        mock_conn = Mock()
+        mock_get_connection.return_value = mock_conn
+        mock_save_postgres.return_value = True
+        mock_get_session.return_value = 'test-session-id'
+        mock_extract_repo.return_value = 'github.com/user/repo'
+        
+        # Run main
+        with patch('sys.stdin', new=mock_stdin):
+            with patch('builtins.print'):
+                save_user_prompt.main()
+        
+        # Verify PostgreSQL path was taken
+        mock_get_connection.assert_called_once()
+        mock_save_postgres.assert_called_once()
+        mock_conn.close.assert_called_once()
+        
+        # Verify prompt_data structure
+        call_args = mock_save_postgres.call_args[0]
+        assert call_args[0] == mock_conn
+        prompt_data = call_args[1]
+        assert prompt_data['prompt'] == 'Test prompt'
+        assert prompt_data['session_id'] == 'test-session-id'
+        assert prompt_data['repository'] == 'github.com/user/repo'
+        assert 'created_at' in prompt_data
 
-    def test_main_execution_flow_postgres_fallback(self):
-        """
-        TODO for task 4: Test fallback to YAML when PostgreSQL fails
-        - Mock stdin with prompt data
-        - Mock PostgreSQL connection failure
-        - Verify YAML fallback path taken
-        - Verify correct log messages
-        """
-        pass
+    @patch.dict(os.environ, {
+        'CLAUDE_POSTGRES_SERVER_DSN': 'postgresql://user:pass@localhost/db',
+        'CLAUDE_PROJECT_DIR': '/test/project',
+        'CLAUDE_SESSION_ID': 'yaml-session-id'
+    })
+    @patch('save_user_prompt.get_postgres_connection')
+    @patch('save_user_prompt.save_to_yaml')
+    @patch('sys.stdin')
+    def test_main_execution_flow_postgres_fallback(self, mock_stdin, mock_save_yaml, 
+                                                    mock_get_connection):
+        """Test fallback to YAML when PostgreSQL fails"""
+        # Setup mocks
+        mock_stdin.read.return_value = json.dumps({'prompt': 'Test prompt'})
+        mock_stdin.buffer = Mock()
+        mock_stdin.buffer.read.return_value = json.dumps({'prompt': 'Test prompt'}).encode()
+        
+        # PostgreSQL connection fails
+        mock_get_connection.return_value = None
+        mock_save_yaml.return_value = True
+        
+        # Run main
+        with patch('sys.stdin', new=mock_stdin):
+            with patch('builtins.print'):
+                save_user_prompt.main()
+        
+        # Verify YAML fallback was used
+        mock_save_yaml.assert_called_once()
+        call_args = mock_save_yaml.call_args[0]
+        assert str(call_args[0]) == '/test/project/user_prompts.yaml'
+        assert call_args[2] == 'Test prompt'  # prompt
+        # session_id should come from environment or function
 
-    def test_main_execution_flow_no_postgres_config(self):
-        """
-        TODO for task 4: Test YAML-only mode when no PostgreSQL config
-        - Mock stdin with prompt data
-        - No PostgreSQL environment variables set
-        - Verify YAML path taken directly
-        - Verify correct log messages
-        """
-        pass
+    @patch.dict(os.environ, {
+        'CLAUDE_PROJECT_DIR': '/test/project',
+        'CLAUDE_SESSION_ID': 'yaml-session-id'
+    }, clear=True)
+    @patch('save_user_prompt.save_to_yaml')
+    @patch('save_user_prompt.get_postgres_connection')
+    @patch('sys.stdin')
+    def test_main_execution_flow_no_postgres_config(self, mock_stdin, mock_get_connection, 
+                                                     mock_save_yaml):
+        """Test YAML-only mode when no PostgreSQL config"""
+        # Setup mocks
+        mock_stdin.read.return_value = json.dumps({'prompt': 'Test prompt'})
+        mock_stdin.buffer = Mock()
+        mock_stdin.buffer.read.return_value = json.dumps({'prompt': 'Test prompt'}).encode()
+        
+        mock_save_yaml.return_value = True
+        
+        # Ensure env vars are set correctly
+        os.environ['CLAUDE_PROJECT_DIR'] = '/test/project'
+        os.environ['CLAUDE_SESSION_ID'] = 'yaml-session-id'
+        
+        # Run main
+        with patch('sys.stdin', new=mock_stdin):
+            with patch('builtins.print'):
+                save_user_prompt.main()
+        
+        # Verify PostgreSQL was not attempted
+        mock_get_connection.assert_not_called()
+        
+        # Verify YAML was used directly
+        mock_save_yaml.assert_called_once()
+        call_args = mock_save_yaml.call_args[0]
+        assert str(call_args[0]) == '/test/project/user_prompts.yaml'
+        assert call_args[2] == 'Test prompt'
+    
+    @patch.dict(os.environ, {
+        'CLAUDE_POSTGRES_SERVER_DSN': 'postgresql://user:pass@localhost/db',
+        'CLAUDE_PROJECT_DIR': '/test/project'
+    })
+    @patch('save_user_prompt.get_postgres_connection')
+    @patch('save_user_prompt.save_to_postgres')
+    @patch('save_user_prompt.save_to_yaml')
+    @patch('sys.stdin')
+    def test_main_execution_flow_postgres_insert_failure(self, mock_stdin, mock_save_yaml,
+                                                          mock_save_postgres, mock_get_connection):
+        """Test fallback to YAML when PostgreSQL insert fails"""
+        # Setup mocks
+        mock_stdin.read.return_value = json.dumps({'prompt': 'Test prompt'})
+        mock_stdin.buffer = Mock()
+        mock_stdin.buffer.read.return_value = json.dumps({'prompt': 'Test prompt'}).encode()
+        
+        mock_conn = Mock()
+        mock_get_connection.return_value = mock_conn
+        mock_save_postgres.return_value = False  # Insert fails
+        mock_save_yaml.return_value = True
+        
+        # Run main
+        with patch('sys.stdin', new=mock_stdin):
+            with patch('builtins.print'):
+                save_user_prompt.main()
+        
+        # Verify both were attempted
+        mock_get_connection.assert_called_once()
+        mock_save_postgres.assert_called_once()
+        mock_save_yaml.assert_called_once()
+        mock_conn.close.assert_called_once()

@@ -117,26 +117,64 @@ def main():
     # Generate timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     created_at = datetime.now()
-
-    # TODO for task 4: Implement main execution flow with PostgreSQL/YAML routing
-    # - Attempt PostgreSQL connection first
-    # - If connection successful, prepare prompt_data:
-    #   - Extract prompt from arguments/stdin
-    #   - Get repository from git
-    #   - Get session_id from environment
-    #   - Add current timestamp
-    # - Try save_to_postgres()
-    # - On any failure, fall back to existing YAML logic
-    # - Ensure YAML structure preservation
-    # - Add comprehensive info-level logging throughout
     
-    # For now, use existing YAML functionality
-    yaml_file = Path(os.getenv("CLAUDE_PROJECT_DIR"), "user_prompts.yaml")
+    # Check if PostgreSQL configuration exists
+    has_postgres_config = any([
+        os.getenv('CLAUDE_POSTGRES_SERVER_DSN'),
+        all([
+            os.getenv('CLAUDE_POSTGRES_SERVER_HOST_PORT'),
+            os.getenv('CLAUDE_POSTGRES_SERVER_USER'),
+            os.getenv('CLAUDE_POSTGRES_SERVER_PASS'),
+            os.getenv('CLAUDE_POSTGRES_SERVER_DB_NAME')
+        ])
+    ])
     
-    if not save_to_yaml(yaml_file, timestamp, user_prompt):
-        sys.exit(1)
+    saved_successfully = False
     
-    logger.info(f"Prompt saved to YAML: {yaml_file}")
+    if has_postgres_config:
+        logger.info("PostgreSQL configuration detected, attempting database storage")
+        
+        # Try PostgreSQL storage
+        connection = get_postgres_connection()
+        
+        if connection:
+            # Prepare prompt data
+            prompt_data = {
+                'created_at': created_at,
+                'prompt': user_prompt,
+                'session_id': get_session_id(),
+                'repository': extract_repository_from_git()
+            }
+            
+            # Attempt to save to PostgreSQL
+            if save_to_postgres(connection, prompt_data):
+                saved_successfully = True
+                logger.info("Successfully saved prompt to PostgreSQL")
+            else:
+                logger.warning("Failed to save to PostgreSQL, falling back to YAML")
+            
+            # Close the connection
+            try:
+                connection.close()
+            except:
+                pass
+        else:
+            logger.warning("Could not establish PostgreSQL connection, falling back to YAML")
+    else:
+        logger.info("No PostgreSQL configuration found, using YAML storage")
+    
+    # Fall back to YAML if PostgreSQL failed or wasn't configured
+    if not saved_successfully:
+        yaml_file = Path(os.getenv("CLAUDE_PROJECT_DIR"), "user_prompts.yaml")
+        
+        # Get session_id for YAML storage (might be different from PostgreSQL logic)
+        session_id = get_session_id() or os.getenv("CLAUDE_SESSION_ID", "")
+        
+        if save_to_yaml(yaml_file, timestamp, user_prompt, session_id):
+            logger.info(f"Prompt saved to YAML: {yaml_file}")
+        else:
+            logger.error("Failed to save prompt to YAML")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
