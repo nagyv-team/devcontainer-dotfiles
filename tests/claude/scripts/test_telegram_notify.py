@@ -30,6 +30,7 @@ from telegram_notify import (
     format_telegram_message,
     send_telegram_notification,
     setup_logging,
+    main,
 )
 
 
@@ -474,21 +475,227 @@ class TestLogging:
 class TestMainFunction:
     """Test main entry point."""
     
-    # TODO for task 3: Implement tests for main()
-    # - Test successful flow end-to-end
-    # - Test with missing environment variables
-    # - Test with transcript parsing failure
-    # - Test with Telegram send failure
-    # - Test silent failure behavior
-    # - Test logging of all operations
-    pass
+    def test_successful_flow_end_to_end(self, tmp_path):
+        """Test successful end-to-end flow."""
+        # Create a test transcript
+        transcript_file = tmp_path / "test.jsonl"
+        with open(transcript_file, 'w') as f:
+            f.write('{"type": "assistant", "message": {"content": [{"type": "text", "text": "Test message"}]}}\n')
+        
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat',
+            'CLAUDE_PROJECT_DIR': '/test/project',
+            'CLAUDE_SESSION_ID': 'test_session'
+        }):
+            with patch('sys.argv', ['telegram_notify.py', '--transcript', str(transcript_file)]):
+                with patch('telegram_notify.requests.post') as mock_post:
+                    mock_response = Mock()
+                    mock_response.status_code = 200
+                    mock_response.json.return_value = {'ok': True}
+                    mock_post.return_value = mock_response
+                    
+                    result = main()
+                    assert result == 0
+                    mock_post.assert_called_once()
+    
+    def test_with_missing_environment_variables(self):
+        """Test with missing environment variables."""
+        with patch.dict(os.environ, {}, clear=True):
+            with patch('sys.argv', ['telegram_notify.py']):
+                result = main()
+                assert result == 1
+    
+    def test_with_transcript_parsing_failure(self, tmp_path):
+        """Test with transcript parsing failure."""
+        # Create empty transcript
+        transcript_file = tmp_path / "empty.jsonl"
+        transcript_file.touch()
+        
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py', '--transcript', str(transcript_file)]):
+                result = main()
+                assert result == 1
+    
+    def test_with_telegram_send_failure(self, tmp_path):
+        """Test with Telegram send failure."""
+        # Create a test transcript
+        transcript_file = tmp_path / "test.jsonl"
+        with open(transcript_file, 'w') as f:
+            f.write('{"type": "assistant", "message": {"content": [{"type": "text", "text": "Test"}]}}\n')
+        
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py', '--transcript', str(transcript_file)]):
+                with patch('telegram_notify.requests.post') as mock_post:
+                    mock_post.side_effect = Exception("Network error")
+                    
+                    result = main()
+                    assert result == 1
+    
+    def test_silent_failure_behavior(self):
+        """Test that failures are silent (logged but don't raise)."""
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py']):
+                with patch('telegram_notify.parse_claude_transcript') as mock_parse:
+                    mock_parse.side_effect = Exception("Unexpected error")
+                    
+                    # Should not raise, just return error code
+                    result = main()
+                    assert result == 1
+    
+    def test_logging_of_all_operations(self, tmp_path):
+        """Test that all operations are logged."""
+        transcript_file = tmp_path / "test.jsonl"
+        with open(transcript_file, 'w') as f:
+            f.write('{"type": "assistant", "message": {"content": [{"type": "text", "text": "Test"}]}}\n')
+        
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py', '--transcript', str(transcript_file), '--debug']):
+                with patch('telegram_notify.requests.post') as mock_post:
+                    mock_response = Mock()
+                    mock_response.status_code = 200
+                    mock_response.json.return_value = {'ok': True}
+                    mock_post.return_value = mock_response
+                    
+                    with patch('telegram_notify.setup_logging') as mock_logging:
+                        mock_logger = Mock()
+                        mock_logger.handlers = []
+                        mock_logging.return_value = mock_logger
+                        
+                        main()
+                        
+                        # Check that logging was called
+                        assert mock_logger.info.called
+                        assert mock_logger.debug.called or mock_logger.info.called
 
 
 class TestCLISupport:
     """Test CLI argument parsing and standalone mode."""
     
-    # TODO for task 3: Implement tests for CLI functionality
-    # - Test --help option
-    # - Test standalone execution
-    # - Test hook mode vs standalone mode
-    pass
+    def test_help_option(self):
+        """Test --help option."""
+        with patch('sys.argv', ['telegram_notify.py', '--help']):
+            with patch('sys.exit') as mock_exit:
+                try:
+                    main()
+                except SystemExit:
+                    pass
+                # Help should cause exit with code 0
+                mock_exit.assert_called()
+    
+    def test_test_message_option(self):
+        """Test --test-message option."""
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py', '--test-message', 'Hello Test']):
+                with patch('telegram_notify.requests.post') as mock_post:
+                    mock_response = Mock()
+                    mock_response.status_code = 200
+                    mock_response.json.return_value = {'ok': True}
+                    mock_post.return_value = mock_response
+                    
+                    result = main()
+                    assert result == 0
+                    
+                    # Check that the test message was sent
+                    call_args = mock_post.call_args
+                    assert 'Hello Test' in call_args[1]['json']['text']
+    
+    def test_transcript_option(self, tmp_path):
+        """Test --transcript option."""
+        transcript_file = tmp_path / "custom.jsonl"
+        with open(transcript_file, 'w') as f:
+            f.write('{"type": "assistant", "message": {"content": [{"type": "text", "text": "Custom"}]}}\n')
+        
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py', '--transcript', str(transcript_file)]):
+                with patch('telegram_notify.requests.post') as mock_post:
+                    mock_response = Mock()
+                    mock_response.status_code = 200
+                    mock_response.json.return_value = {'ok': True}
+                    mock_post.return_value = mock_response
+                    
+                    result = main()
+                    assert result == 0
+                    
+                    # Check that custom transcript was used
+                    call_args = mock_post.call_args
+                    assert 'Custom' in call_args[1]['json']['text']
+    
+    def test_debug_option(self):
+        """Test --debug option enables debug logging."""
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py', '--test-message', 'Debug test', '--debug']):
+                with patch('telegram_notify.requests.post') as mock_post:
+                    mock_response = Mock()
+                    mock_response.status_code = 200
+                    mock_response.json.return_value = {'ok': True}
+                    mock_post.return_value = mock_response
+                    
+                    with patch('telegram_notify.setup_logging') as mock_logging:
+                        mock_logger = Mock()
+                        mock_handler = Mock(spec=logging.StreamHandler)
+                        mock_logger.handlers = [mock_handler]
+                        mock_logging.return_value = mock_logger
+                        
+                        result = main()
+                        assert result == 0
+                        
+                        # Check that debug logging was enabled
+                        mock_logger.setLevel.assert_called_with(logging.DEBUG)
+                        mock_handler.setLevel.assert_called_with(logging.DEBUG)
+    
+    def test_hook_mode_vs_standalone(self):
+        """Test difference between hook mode and standalone execution."""
+        # Hook mode (no arguments, uses environment)
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat',
+            'CLAUDE_TRANSCRIPT_PATH': '/tmp/transcript.jsonl'
+        }):
+            with patch('sys.argv', ['telegram_notify.py']):
+                with patch('telegram_notify.parse_claude_transcript') as mock_parse:
+                    mock_parse.return_value = "Hook message"
+                    with patch('telegram_notify.send_telegram_notification') as mock_send:
+                        mock_send.return_value = True
+                        
+                        result = main()
+                        assert result == 0
+                        # Check that parse was called with the transcript path
+                        assert mock_parse.called
+                        assert mock_parse.call_args[0][0] == '/tmp/transcript.jsonl'
+        
+        # Standalone mode (with explicit arguments)
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py', '--test-message', 'Standalone']):
+                with patch('telegram_notify.send_telegram_notification') as mock_send:
+                    mock_send.return_value = True
+                    
+                    result = main()
+                    assert result == 0
+                    # Should use test message, not parse transcript
+                    call_args = mock_send.call_args
+                    assert 'Standalone' in call_args[0][2]

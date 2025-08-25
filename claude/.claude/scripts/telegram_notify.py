@@ -330,18 +330,134 @@ def main():
     Orchestrates the flow: logging setup -> config check -> transcript parse ->
     message format -> Telegram send. Fails silently with logging on any error.
     
-    TODO for task 3: Implement main entry point
-    - Set up logging first
-    - Check for environment variables
-    - Parse transcript
-    - Format and send message
-    - Log all operations
-    - Exit silently on any error
-    
-    TODO for task 3: Add CLI argument parsing
-    - --help for usage information
+    Returns:
+        0 on success, 1 on error (but exits silently)
     """
-    pass
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='Send Claude Code notifications to Telegram',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Environment Variables:
+  CLAUDE_TELEGRAM_BOT_ID    Your Telegram bot token
+  CLAUDE_TELEGRAM_CHAT_ID   Your Telegram chat/channel ID
+  CLAUDE_PROJECT_DIR        Project directory path (optional)
+  CLAUDE_SESSION_ID         Session ID (optional)
+  CLAUDE_TRANSCRIPT_PATH    Path to transcript file (optional)
+
+Usage:
+  As a hook in Claude Code settings.json:
+    python telegram_notify.py
+
+  For testing with a specific transcript:
+    python telegram_notify.py --transcript /path/to/transcript.jsonl
+
+  For testing with a custom message:
+    python telegram_notify.py --test-message "Your test message here"
+"""
+    )
+    
+    parser.add_argument(
+        '--transcript',
+        type=str,
+        help='Path to Claude transcript JSONL file (overrides CLAUDE_TRANSCRIPT_PATH)'
+    )
+    
+    parser.add_argument(
+        '--test-message',
+        type=str,
+        help='Send a test message instead of parsing transcript'
+    )
+    
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Enable debug logging to console'
+    )
+    
+    args = parser.parse_args()
+    
+    # Set up logging first
+    logger = setup_logging()
+    
+    # Adjust logging level if debug flag is set
+    if args.debug:
+        for handler in logger.handlers:
+            if isinstance(handler, logging.StreamHandler):
+                handler.setLevel(logging.DEBUG)
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Debug logging enabled")
+    
+    try:
+        # Check for environment variables
+        config = get_environment_config(logger)
+        if not config:
+            logger.error("Missing required environment variables. Exiting.")
+            return 1
+        
+        # Get project directory and session ID from environment
+        project_dir = os.environ.get('CLAUDE_PROJECT_DIR')
+        session_id = os.environ.get('CLAUDE_SESSION_ID')
+        
+        # Determine what message to send
+        if args.test_message:
+            # Use test message if provided
+            logger.info("Using test message from command line")
+            message_text = args.test_message
+        else:
+            # Determine transcript file path
+            if args.transcript:
+                transcript_file = args.transcript
+                logger.info(f"Using transcript file from command line: {transcript_file}")
+            else:
+                # Try to get from environment or use default
+                transcript_file = os.environ.get('CLAUDE_TRANSCRIPT_PATH')
+                if not transcript_file:
+                    # Use default Claude Code transcript location
+                    home_dir = os.path.expanduser('~')
+                    transcript_file = os.path.join(
+                        home_dir,
+                        '.claude',
+                        'transcripts',
+                        'current.jsonl'
+                    )
+                logger.info(f"Using transcript file: {transcript_file}")
+            
+            # Parse the transcript
+            message_text = parse_claude_transcript(transcript_file, logger)
+            if not message_text:
+                logger.warning("No assistant message found in transcript. Exiting.")
+                return 1
+        
+        # Format the message
+        formatted_message = format_telegram_message(
+            message_text,
+            project_dir=project_dir,
+            session_id=session_id,
+            logger=logger
+        )
+        
+        # Send to Telegram
+        success = send_telegram_notification(
+            config['bot_id'],
+            config['chat_id'],
+            formatted_message,
+            logger=logger
+        )
+        
+        if success:
+            logger.info("Notification sent successfully")
+            return 0
+        else:
+            logger.error("Failed to send notification")
+            return 1
+            
+    except Exception as e:
+        # Log the error but exit silently
+        logger.error(f"Unexpected error in main: {e}", exc_info=True)
+        return 1
 
 
-# TODO for task 3: Add if __name__ == "__main__": block for direct execution
+if __name__ == "__main__":
+    # Exit silently with appropriate code
+    sys.exit(main())
