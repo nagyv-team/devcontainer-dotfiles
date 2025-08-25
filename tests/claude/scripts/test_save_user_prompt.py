@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock, call
 import tempfile
+import subprocess
 
 # Add parent directory to path to import save_user_prompt
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'claude', '.claude', 'scripts'))
@@ -141,102 +142,209 @@ class TestSaveUserPrompt:
         assert result == mock_conn
 
     def test_save_to_postgres_success(self):
-        """
-        TODO for task 3: Test successful insert to PostgreSQL
-        - Mock connection and cursor
-        - Verify parameterized query used
-        - Verify all fields inserted correctly
-        - Assert True returned
-        """
-        pass
+        """Test successful insert to PostgreSQL"""
+        mock_cursor = Mock()
+        mock_conn = Mock()
+        mock_conn.cursor.return_value.__enter__ = Mock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = Mock(return_value=None)
+        
+        prompt_data = {
+            'created_at': datetime.now(),
+            'prompt': 'Test prompt',
+            'session_id': 'test-session-id',
+            'repository': 'github.com/user/repo'
+        }
+        
+        result = save_to_postgres(mock_conn, prompt_data)
+        
+        assert result is True
+        mock_cursor.execute.assert_called_once()
+        mock_conn.commit.assert_called_once()
+        
+        # Verify parameterized query was used
+        call_args = mock_cursor.execute.call_args
+        assert 'INSERT INTO user_prompts' in call_args[0][0]
+        assert call_args[0][1] == (
+            prompt_data['created_at'],
+            prompt_data['prompt'],
+            prompt_data['session_id'],
+            prompt_data['repository']
+        )
 
     def test_save_to_postgres_sql_injection_prevention(self):
-        """
-        TODO for task 3: Test SQL injection prevention
-        - Provide malicious input in prompt_data
-        - Verify parameterized query prevents injection
-        """
-        pass
+        """Test SQL injection prevention"""
+        mock_cursor = Mock()
+        mock_conn = Mock()
+        mock_conn.cursor.return_value.__enter__ = Mock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = Mock(return_value=None)
+        
+        # Malicious SQL injection attempt
+        prompt_data = {
+            'created_at': datetime.now(),
+            'prompt': "'; DROP TABLE user_prompts; --",
+            'session_id': "'; DELETE FROM user_prompts; --",
+            'repository': 'github.com/user/repo'
+        }
+        
+        result = save_to_postgres(mock_conn, prompt_data)
+        
+        assert result is True
+        # Verify parameterized query was used (not string concatenation)
+        call_args = mock_cursor.execute.call_args
+        # The SQL should not contain the malicious code directly
+        assert "DROP TABLE" not in call_args[0][0]
+        assert "DELETE FROM" not in call_args[0][0]
+        # The malicious strings should be in the parameters tuple
+        assert "'; DROP TABLE user_prompts; --" in call_args[0][1]
+        assert "'; DELETE FROM user_prompts; --" in call_args[0][1]
 
     def test_save_to_postgres_null_fields(self):
-        """
-        TODO for task 3: Test handling of NULL optional fields
-        - Provide prompt_data with None values for optional fields
-        - Verify NULL values handled correctly
-        """
-        pass
+        """Test handling of NULL optional fields"""
+        mock_cursor = Mock()
+        mock_conn = Mock()
+        mock_conn.cursor.return_value.__enter__ = Mock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = Mock(return_value=None)
+        
+        prompt_data = {
+            'created_at': datetime.now(),
+            'prompt': 'Test prompt',
+            'session_id': None,
+            'repository': None
+        }
+        
+        result = save_to_postgres(mock_conn, prompt_data)
+        
+        assert result is True
+        call_args = mock_cursor.execute.call_args
+        # Verify None values are passed for optional fields
+        assert call_args[0][1][2] is None  # session_id
+        assert call_args[0][1][3] is None  # repository
 
     def test_save_to_postgres_failure_handling(self):
-        """
-        TODO for task 3: Test insert failure handling
-        - Mock cursor.execute to raise exception
-        - Verify False returned (not exception raised)
-        """
-        pass
+        """Test insert failure handling"""
+        mock_cursor = Mock()
+        mock_cursor.execute.side_effect = Exception("Database error")
+        mock_conn = Mock()
+        mock_conn.cursor.return_value.__enter__ = Mock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = Mock(return_value=None)
+        
+        prompt_data = {
+            'created_at': datetime.now(),
+            'prompt': 'Test prompt',
+            'session_id': 'test-session',
+            'repository': 'github.com/user/repo'
+        }
+        
+        result = save_to_postgres(mock_conn, prompt_data)
+        
+        assert result is False
+        mock_conn.rollback.assert_called_once()
+    
+    def test_save_to_postgres_no_connection(self):
+        """Test handling when connection is None"""
+        result = save_to_postgres(None, {'prompt': 'test'})
+        assert result is False
 
-    def test_extract_repository_from_git_github(self):
-        """
-        TODO for task 3: Test GitHub repository extraction
-        - Mock subprocess.run to return GitHub URL
-        - Verify correct parsing to github.com/user/repo format
-        """
-        pass
+    @patch.dict(os.environ, {'CLAUDE_PROJECT_DIR': '/test/project'})
+    @patch('subprocess.run')
+    def test_extract_repository_from_git_github(self, mock_run):
+        """Test GitHub repository extraction"""
+        mock_run.return_value = Mock(
+            returncode=0,
+            stdout='https://github.com/user/repo.git\n',
+            stderr=''
+        )
+        
+        result = extract_repository_from_git()
+        
+        assert result == 'github.com/user/repo'
+        mock_run.assert_called_once_with(
+            ['git', 'remote', 'get-url', 'origin'],
+            cwd='/test/project',
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
 
-    def test_extract_repository_from_git_gitlab(self):
-        """
-        TODO for task 3: Test GitLab repository extraction
-        - Mock subprocess.run to return GitLab URL
-        - Verify correct parsing to gitlab.com/org/project format
-        """
-        pass
+    @patch.dict(os.environ, {'CLAUDE_PROJECT_DIR': '/test/project'})
+    @patch('subprocess.run')
+    def test_extract_repository_from_git_gitlab(self, mock_run):
+        """Test GitLab repository extraction"""
+        mock_run.return_value = Mock(
+            returncode=0,
+            stdout='https://gitlab.com/org/project\n',
+            stderr=''
+        )
+        
+        result = extract_repository_from_git()
+        
+        assert result == 'gitlab.com/org/project'
 
-    def test_extract_repository_from_git_ssh_format(self):
-        """
-        TODO for task 3: Test SSH format repository URL parsing
-        - Mock subprocess.run to return git@github.com:user/repo.git
-        - Verify correct parsing
-        """
-        pass
+    @patch.dict(os.environ, {'CLAUDE_PROJECT_DIR': '/test/project'})
+    @patch('subprocess.run')
+    def test_extract_repository_from_git_ssh_format(self, mock_run):
+        """Test SSH format repository URL parsing"""
+        mock_run.return_value = Mock(
+            returncode=0,
+            stdout='git@github.com:user/repo.git\n',
+            stderr=''
+        )
+        
+        result = extract_repository_from_git()
+        
+        assert result == 'github.com/user/repo'
 
-    def test_extract_repository_from_git_no_origin(self):
-        """
-        TODO for task 3: Test handling when no origin remote exists
-        - Mock subprocess.run to return error
-        - Verify None returned
-        """
-        pass
+    @patch.dict(os.environ, {'CLAUDE_PROJECT_DIR': '/test/project'})
+    @patch('subprocess.run')
+    def test_extract_repository_from_git_no_origin(self, mock_run):
+        """Test handling when no origin remote exists"""
+        mock_run.return_value = Mock(
+            returncode=1,
+            stdout='',
+            stderr='fatal: No such remote origin'
+        )
+        
+        result = extract_repository_from_git()
+        
+        assert result is None
 
-    def test_extract_repository_from_git_not_repository(self):
-        """
-        TODO for task 3: Test handling when not in git repository
-        - Mock subprocess.run to return error
-        - Verify None returned
-        """
-        pass
+    @patch.dict(os.environ, {'CLAUDE_PROJECT_DIR': '/test/project'})
+    @patch('subprocess.run')
+    def test_extract_repository_from_git_not_repository(self, mock_run):
+        """Test handling when not in git repository"""
+        mock_run.return_value = Mock(
+            returncode=128,
+            stdout='',
+            stderr='fatal: not a git repository'
+        )
+        
+        result = extract_repository_from_git()
+        
+        assert result is None
+    
+    @patch.dict(os.environ, {}, clear=True)
+    def test_extract_repository_from_git_no_project_dir(self):
+        """Test when CLAUDE_PROJECT_DIR is not set"""
+        result = extract_repository_from_git()
+        assert result is None
 
+    @patch.dict(os.environ, {'CLAUDE_SESSION_ID': '550e8400-e29b-41d4-a716-446655440000'})
     def test_get_session_id_valid_uuid(self):
-        """
-        TODO for task 3: Test valid UUID session ID extraction
-        - Mock environment variable with valid UUID
-        - Verify UUID returned
-        """
-        pass
+        """Test valid UUID session ID extraction"""
+        result = get_session_id()
+        assert result == '550e8400-e29b-41d4-a716-446655440000'
 
+    @patch.dict(os.environ, {'CLAUDE_SESSION_ID': 'not-a-valid-uuid'})
     def test_get_session_id_invalid_format(self):
-        """
-        TODO for task 3: Test invalid session ID format handling
-        - Mock environment variable with invalid UUID
-        - Verify None returned
-        """
-        pass
+        """Test invalid session ID format handling"""
+        result = get_session_id()
+        assert result is None
 
+    @patch.dict(os.environ, {}, clear=True)
     def test_get_session_id_not_present(self):
-        """
-        TODO for task 3: Test missing session ID handling
-        - No session_id in environment
-        - Verify None returned
-        """
-        pass
+        """Test missing session ID handling"""
+        result = get_session_id()
+        assert result is None
 
     def test_save_to_yaml_new_file(self):
         """Test saving to new YAML file"""

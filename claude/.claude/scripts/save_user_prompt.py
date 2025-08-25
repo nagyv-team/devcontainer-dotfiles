@@ -8,6 +8,7 @@ import sys
 import json
 import logging
 import subprocess
+import re
 from datetime import datetime
 import yaml
 from pathlib import Path
@@ -88,33 +89,142 @@ def get_postgres_connection():
 
 def save_to_postgres(connection, prompt_data: Dict[str, Any]) -> bool:
     """
-    TODO for task 3: Insert prompt data into user_prompts table
+    Insert prompt data into user_prompts table
     - Use parameterized queries
     - Handle all fields: created_at, prompt, session_id, repository
     - Return True on success, False on failure
     """
-    return False
+    if not connection:
+        return False
+    
+    try:
+        with connection.cursor() as cursor:
+            # Prepare the INSERT query with parameterized values
+            insert_query = """
+                INSERT INTO user_prompts (created_at, prompt, session_id, repository)
+                VALUES (%s, %s, %s, %s)
+            """
+            
+            # Execute the query with the provided data
+            cursor.execute(
+                insert_query,
+                (
+                    prompt_data.get('created_at'),
+                    prompt_data.get('prompt'),
+                    prompt_data.get('session_id'),
+                    prompt_data.get('repository')
+                )
+            )
+            
+            # Commit the transaction
+            connection.commit()
+            
+            logger.info("Successfully saved prompt to PostgreSQL")
+            return True
+            
+    except Exception as e:
+        logger.warning(f"Failed to save prompt to PostgreSQL: {e}")
+        try:
+            connection.rollback()
+        except:
+            pass
+        return False
 
 
 def extract_repository_from_git() -> Optional[str]:
     """
-    TODO for task 3: Extract repository info from git context
+    Extract repository info from git context
     - Use CLAUDE_PROJECT_DIR environment variable
     - Run git remote get-url origin
     - Parse and normalize repository format (e.g., github.com/user/repo)
     - Return None if not in git repository
     """
-    return None
+    project_dir = os.getenv('CLAUDE_PROJECT_DIR')
+    if not project_dir:
+        logger.debug("CLAUDE_PROJECT_DIR not set, cannot extract repository")
+        return None
+    
+    try:
+        # Run git remote get-url origin in the project directory
+        result = subprocess.run(
+            ['git', 'remote', 'get-url', 'origin'],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if result.returncode != 0:
+            logger.debug(f"Git command failed: {result.stderr}")
+            return None
+        
+        remote_url = result.stdout.strip()
+        if not remote_url:
+            logger.debug("No origin remote found")
+            return None
+        
+        # Parse various git URL formats
+        # SSH format: git@github.com:user/repo.git
+        ssh_pattern = r'git@([^:]+):([^/]+)/(.+?)$'
+        ssh_match = re.match(ssh_pattern, remote_url)
+        if ssh_match:
+            host = ssh_match.group(1)
+            user = ssh_match.group(2)
+            repo = ssh_match.group(3)
+            # Remove .git suffix if present
+            if repo.endswith('.git'):
+                repo = repo[:-4]
+            repository = f"{host}/{user}/{repo}"
+            logger.debug(f"Extracted repository from SSH URL: {repository}")
+            return repository
+        
+        # HTTPS format: https://github.com/user/repo.git or https://github.com/user/repo
+        https_pattern = r'https?://([^/]+)/([^/]+)/(.+?)$'
+        https_match = re.match(https_pattern, remote_url)
+        if https_match:
+            host = https_match.group(1)
+            user = https_match.group(2)
+            repo = https_match.group(3)
+            # Remove .git suffix if present
+            if repo.endswith('.git'):
+                repo = repo[:-4]
+            repository = f"{host}/{user}/{repo}"
+            logger.debug(f"Extracted repository from HTTPS URL: {repository}")
+            return repository
+        
+        logger.debug(f"Could not parse git remote URL: {remote_url}")
+        return None
+        
+    except subprocess.TimeoutExpired:
+        logger.debug("Git command timed out")
+        return None
+    except Exception as e:
+        logger.debug(f"Failed to extract repository from git: {e}")
+        return None
 
 
 def get_session_id() -> Optional[str]:
     """
-    TODO for task 3: Get session ID from environment
+    Get session ID from environment
     - Check for session_id in environment variables
     - Validate UUID format if present
     - Return None if not available
     """
-    return None
+    # Check for CLAUDE_SESSION_ID in environment
+    session_id = os.getenv('CLAUDE_SESSION_ID')
+    
+    if not session_id:
+        logger.debug("No session ID found in environment")
+        return None
+    
+    # Validate UUID format (UUID v4)
+    uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    if re.match(uuid_pattern, session_id.lower()):
+        logger.debug(f"Valid session ID found: {session_id}")
+        return session_id
+    else:
+        logger.debug(f"Invalid session ID format: {session_id}")
+        return None
 
 
 def save_to_yaml(yaml_file: Path, timestamp: str, user_prompt: str, session_id: Optional[str] = None) -> bool:
