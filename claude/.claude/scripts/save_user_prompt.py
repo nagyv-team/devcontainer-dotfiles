@@ -24,13 +24,66 @@ logger = logging.getLogger(__name__)
 
 def get_postgres_connection():
     """
-    TODO for task 2: Establish PostgreSQL connection using environment variables
+    Establish PostgreSQL connection using environment variables
     - Check for CLAUDE_POSTGRES_SERVER_DSN first
     - Fall back to individual env vars (HOST_PORT, USER, PASS, DB_NAME)
     - Enable SSL/TLS
     - Return connection object or None on failure
     """
-    return None
+    try:
+        import psycopg
+        
+        # Check for DSN first (takes precedence)
+        dsn = os.getenv('CLAUDE_POSTGRES_SERVER_DSN')
+        
+        if dsn:
+            logger.debug("Attempting PostgreSQL connection using DSN")
+            # Ensure SSL is required
+            if 'sslmode=' not in dsn:
+                dsn += '?sslmode=require' if '?' not in dsn else '&sslmode=require'
+            conn = psycopg.connect(dsn, connect_timeout=5)
+            logger.info("Successfully connected to PostgreSQL using DSN")
+            return conn
+        
+        # Fall back to individual environment variables
+        host_port = os.getenv('CLAUDE_POSTGRES_SERVER_HOST_PORT')
+        user = os.getenv('CLAUDE_POSTGRES_SERVER_USER')
+        password = os.getenv('CLAUDE_POSTGRES_SERVER_PASS')
+        db_name = os.getenv('CLAUDE_POSTGRES_SERVER_DB_NAME')
+        
+        if host_port and user and password and db_name:
+            logger.debug("Attempting PostgreSQL connection using individual environment variables")
+            # Parse host and port
+            if ':' in host_port:
+                host, port = host_port.split(':', 1)
+            else:
+                host = host_port
+                port = '5432'  # Default PostgreSQL port
+            
+            # Build connection string
+            conn_string = (
+                f"host={host} "
+                f"port={port} "
+                f"dbname={db_name} "
+                f"user={user} "
+                f"password={password} "
+                f"sslmode=require "
+                f"connect_timeout=5"
+            )
+            
+            conn = psycopg.connect(conn_string)
+            logger.info("Successfully connected to PostgreSQL using individual environment variables")
+            return conn
+        
+        logger.debug("No PostgreSQL configuration found in environment variables")
+        return None
+        
+    except ImportError:
+        logger.warning("psycopg module not installed, PostgreSQL support unavailable")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to connect to PostgreSQL: {e}")
+        return None
 
 
 def save_to_postgres(connection, prompt_data: Dict[str, Any]) -> bool:
