@@ -1,0 +1,4 @@
+# Core dependencies for dotfiles scripts
+pyyaml>=6.0
+
+# TODO for task 2: Add psycopg3[binary]>=3.1
