@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 import pytest
 import json
 import tempfile
+import logging
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
@@ -28,6 +29,7 @@ from telegram_notify import (
     parse_claude_transcript,
     format_telegram_message,
     send_telegram_notification,
+    setup_logging,
 )
 
 
@@ -342,13 +344,131 @@ class TestTelegramIntegration:
 class TestLogging:
     """Test logging infrastructure."""
     
-    # TODO for task 2: Implement tests for setup_logging()
-    # - Test log directory creation
-    # - Test rotation configuration
-    # - Test permission error handling
-    # - Test fallback to temp directory
-    # - Test log format
-    pass
+    def test_log_directory_creation(self, tmp_path):
+        """Test that log directory is created successfully."""
+        with patch('telegram_notify.os.makedirs') as mock_makedirs:
+            with patch('telegram_notify.open', create=True) as mock_open:
+                with patch('telegram_notify.os.remove'):
+                    logger = setup_logging()
+                    
+                    # Check that makedirs was called
+                    assert mock_makedirs.called
+                    assert logger is not None
+                    assert logger.name == 'claude_telegram_notifier'
+    
+    def test_rotation_configuration(self):
+        """Test that TimedRotatingFileHandler is configured correctly."""
+        with patch('telegram_notify.TimedRotatingFileHandler') as mock_handler:
+            # Configure the mock to have required attributes
+            mock_instance = Mock()
+            mock_instance.level = logging.INFO
+            mock_instance.setFormatter = Mock()
+            mock_handler.return_value = mock_instance
+            
+            with patch('telegram_notify.os.makedirs'):
+                with patch('telegram_notify.open', create=True):
+                    with patch('telegram_notify.os.remove'):
+                        setup_logging()
+                        
+                        # Check handler was created with correct parameters
+                        mock_handler.assert_called_once()
+                        call_args = mock_handler.call_args
+                        assert call_args[1]['when'] == 'midnight'
+                        assert call_args[1]['interval'] == 1
+                        assert call_args[1]['backupCount'] == 3
+    
+    def test_permission_error_handling(self, tmp_path):
+        """Test fallback to temp directory on permission errors."""
+        with patch('telegram_notify.os.makedirs') as mock_makedirs:
+            # First call raises PermissionError, second succeeds
+            mock_makedirs.side_effect = [PermissionError("No permission"), None]
+            
+            with patch('telegram_notify.tempfile.gettempdir') as mock_tempdir:
+                mock_tempdir.return_value = str(tmp_path)
+                
+                logger = setup_logging()
+                
+                # Should have tried /var/log first, then temp dir
+                assert mock_makedirs.call_count >= 2
+                assert logger is not None
+    
+    def test_fallback_to_current_directory(self):
+        """Test fallback to current directory if both /var/log and temp fail."""
+        with patch('telegram_notify.os.makedirs') as mock_makedirs:
+            # All makedirs calls fail
+            mock_makedirs.side_effect = PermissionError("No permission")
+            
+            with patch('telegram_notify.TimedRotatingFileHandler') as mock_handler:
+                # Configure the mock to have required attributes
+                mock_instance = Mock()
+                mock_instance.level = logging.INFO
+                mock_instance.setFormatter = Mock()
+                mock_handler.return_value = mock_instance
+                
+                logger = setup_logging()
+                
+                # Should create handler with local file
+                mock_handler.assert_called_once()
+                call_args = mock_handler.call_args
+                assert call_args[1]['filename'] == 'telegram_notify.log'
+                assert logger is not None
+    
+    def test_log_format(self):
+        """Test that log format is set correctly."""
+        logger = setup_logging()
+        
+        # Check that handlers have been added
+        assert len(logger.handlers) > 0
+        
+        # Check that at least one handler has a formatter
+        has_formatter = False
+        for handler in logger.handlers:
+            if handler.formatter:
+                has_formatter = True
+                # Check format string contains expected elements
+                format_str = handler.formatter._fmt
+                assert '%(asctime)s' in format_str
+                assert '%(levelname)s' in format_str
+                assert '%(message)s' in format_str
+        
+        assert has_formatter
+    
+    def test_logger_info_level(self):
+        """Test that logger is set to INFO level."""
+        logger = setup_logging()
+        assert logger.level == logging.INFO
+    
+    def test_console_handler_added(self):
+        """Test that console handler is added for warnings."""
+        logger = setup_logging()
+        
+        # Check for StreamHandler
+        stream_handlers = [h for h in logger.handlers if isinstance(h, logging.StreamHandler)]
+        assert len(stream_handlers) > 0
+    
+    def test_logging_with_functions(self):
+        """Test that functions properly use the logger."""
+        logger = Mock()
+        
+        # Test get_environment_config with logger
+        with patch.dict(os.environ, {}, clear=True):
+            get_environment_config(logger=logger)
+            logger.warning.assert_called()
+        
+        # Test parse_claude_transcript with logger
+        parse_claude_transcript("/nonexistent/file", logger=logger)
+        logger.warning.assert_called()
+        
+        # Test format_telegram_message with logger
+        long_msg = "A" * 5000
+        format_telegram_message(long_msg, logger=logger)
+        logger.info.assert_called()
+        
+        # Test send_telegram_notification with logger
+        with patch('telegram_notify.requests.post') as mock_post:
+            mock_post.side_effect = Exception("Network error")
+            send_telegram_notification("bot", "chat", "msg", logger=logger)
+            logger.error.assert_called()
 
 
 class TestMainFunction:

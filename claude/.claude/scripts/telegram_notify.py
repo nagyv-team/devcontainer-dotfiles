@@ -25,6 +25,8 @@ import argparse
 from datetime import datetime
 from typing import Optional, Dict, Any
 import requests
+import tempfile
+from logging.handlers import TimedRotatingFileHandler
 
 
 def setup_logging() -> logging.Logger:
@@ -34,20 +36,86 @@ def setup_logging() -> logging.Logger:
     Sets up TimedRotatingFileHandler for daily rotation with 3-day retention.
     Falls back to temp directory if /var/log/ is not writable.
     
-    TODO for task 2: Implement logging infrastructure
-    - Create log directory /var/log/claude_telegram_notifier/
-    - Configure TimedRotatingFileHandler for daily rotation
-    - Set 3-day retention with backupCount=3
-    - Set appropriate log format with timestamps
-    - Handle permission errors gracefully (fallback to temp directory)
-    - Return logger instance
+    Returns:
+        Configured logger instance
     """
-    pass
+    logger = logging.getLogger('claude_telegram_notifier')
+    logger.setLevel(logging.INFO)
+    
+    # Clear any existing handlers
+    logger.handlers.clear()
+    
+    # Define log format with timestamps
+    log_format = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Try to create log directory in /var/log/
+    log_dir = '/var/log/claude_telegram_notifier'
+    log_file = None
+    
+    try:
+        # Attempt to create the log directory
+        os.makedirs(log_dir, exist_ok=True)
+        
+        # Test if we can write to the directory
+        test_file = os.path.join(log_dir, '.write_test')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        
+        log_file = os.path.join(log_dir, 'telegram_notify.log')
+        
+    except (OSError, IOError, PermissionError):
+        # Fall back to temp directory if /var/log/ is not writable
+        temp_dir = tempfile.gettempdir()
+        log_dir = os.path.join(temp_dir, 'claude_telegram_notifier')
+        
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, 'telegram_notify.log')
+        except (OSError, IOError):
+            # If even temp directory fails, use current directory
+            log_file = 'telegram_notify.log'
+    
+    # Create TimedRotatingFileHandler for daily rotation with 3-day retention
+    try:
+        file_handler = TimedRotatingFileHandler(
+            filename=log_file,
+            when='midnight',  # Rotate at midnight
+            interval=1,       # Every 1 day
+            backupCount=3,    # Keep 3 days of backups
+            encoding='utf-8'
+        )
+        file_handler.setFormatter(log_format)
+        logger.addHandler(file_handler)
+        
+        # Also add console handler for debugging
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(log_format)
+        console_handler.setLevel(logging.WARNING)  # Only warnings and errors to console
+        logger.addHandler(console_handler)
+        
+    except (OSError, IOError) as e:
+        # If file handler fails, at least use console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(log_format)
+        logger.addHandler(console_handler)
+        logger.error(f"Failed to create file handler: {e}")
+    
+    # Log the logging configuration
+    logger.info(f"Logging initialized. Log file: {log_file if log_file else 'console only'}")
+    
+    return logger
 
 
-def get_environment_config() -> Optional[Dict[str, str]]:
+def get_environment_config(logger: Optional[logging.Logger] = None) -> Optional[Dict[str, str]]:
     """
     Read and validate environment variables for Telegram configuration.
+    
+    Args:
+        logger: Optional logger instance for logging operations
     
     Returns:
         Dict with bot_id and chat_id if both are present, None otherwise
@@ -55,8 +123,21 @@ def get_environment_config() -> Optional[Dict[str, str]]:
     bot_id = os.environ.get('CLAUDE_TELEGRAM_BOT_ID')
     chat_id = os.environ.get('CLAUDE_TELEGRAM_CHAT_ID')
     
-    if not bot_id or not chat_id:
+    if logger:
+        logger.info("Checking environment variables for Telegram configuration")
+    
+    if not bot_id:
+        if logger:
+            logger.warning("CLAUDE_TELEGRAM_BOT_ID environment variable is not set")
         return None
+    
+    if not chat_id:
+        if logger:
+            logger.warning("CLAUDE_TELEGRAM_CHAT_ID environment variable is not set")
+        return None
+    
+    if logger:
+        logger.info("Environment variables successfully loaded")
     
     return {
         'bot_id': bot_id,
@@ -64,17 +145,23 @@ def get_environment_config() -> Optional[Dict[str, str]]:
     }
 
 
-def parse_claude_transcript(transcript_file: str) -> Optional[str]:
+def parse_claude_transcript(transcript_file: str, logger: Optional[logging.Logger] = None) -> Optional[str]:
     """
     Parse Claude Code transcript JSONL and extract last assistant message.
     
     Args:
         transcript_file: Path to the transcript JSONL file
+        logger: Optional logger instance for logging operations
         
     Returns:
         Text content of the last assistant message, or None if not found
     """
+    if logger:
+        logger.info(f"Parsing transcript file: {transcript_file}")
+    
     if not os.path.exists(transcript_file):
+        if logger:
+            logger.warning(f"Transcript file does not exist: {transcript_file}")
         return None
     
     last_assistant_message = None
@@ -99,12 +186,22 @@ def parse_claude_transcript(transcript_file: str) -> Optional[str]:
                             if isinstance(first_content, dict) and 'text' in first_content:
                                 last_assistant_message = first_content['text']
                                 
-                except (json.JSONDecodeError, KeyError, TypeError, IndexError):
+                except (json.JSONDecodeError, KeyError, TypeError, IndexError) as e:
                     # Skip malformed lines
+                    if logger:
+                        logger.debug(f"Skipping malformed JSON line: {e}")
                     continue
     
-    except (IOError, OSError):
+    except (IOError, OSError) as e:
+        if logger:
+            logger.error(f"Error reading transcript file: {e}")
         return None
+    
+    if logger:
+        if last_assistant_message:
+            logger.info(f"Successfully extracted assistant message ({len(last_assistant_message)} chars)")
+        else:
+            logger.warning("No assistant message found in transcript")
     
     return last_assistant_message
 
@@ -112,7 +209,8 @@ def parse_claude_transcript(transcript_file: str) -> Optional[str]:
 def format_telegram_message(
     message_text: str,
     project_dir: Optional[str] = None,
-    session_id: Optional[str] = None
+    session_id: Optional[str] = None,
+    logger: Optional[logging.Logger] = None
 ) -> str:
     """
     Format message with metadata for Telegram using Markdown.
@@ -121,6 +219,7 @@ def format_telegram_message(
         message_text: The Claude assistant message text
         project_dir: The project directory path from CLAUDE_PROJECT_DIR
         session_id: The session ID if available
+        logger: Optional logger instance for logging operations
         
     Returns:
         Formatted message string with metadata
@@ -150,18 +249,27 @@ def format_telegram_message(
     
     # Truncate message if needed
     if len(message_text) > available_space:
+        original_length = len(message_text)
         message_text = message_text[:available_space - 3] + "..."
+        if logger:
+            logger.info(f"Message truncated from {original_length} to {len(message_text)} characters")
     
     parts.append(message_text)
     parts.append(f"```")
     
-    return "\n".join(parts)
+    formatted_message = "\n".join(parts)
+    
+    if logger:
+        logger.info(f"Message formatted successfully ({len(formatted_message)} chars total)")
+    
+    return formatted_message
 
 
 def send_telegram_notification(
     bot_id: str,
     chat_id: str,
-    message: str
+    message: str,
+    logger: Optional[logging.Logger] = None
 ) -> bool:
     """
     Send formatted message to Telegram channel via Bot API.
@@ -170,6 +278,7 @@ def send_telegram_notification(
         bot_id: Telegram bot token
         chat_id: Telegram chat/channel ID
         message: Formatted message to send
+        logger: Optional logger instance for logging operations
         
     Returns:
         True if successful, False otherwise
@@ -184,6 +293,9 @@ def send_telegram_notification(
         'parse_mode': 'Markdown'
     }
     
+    if logger:
+        logger.info(f"Sending message to Telegram chat {chat_id}")
+    
     try:
         # Send POST request to Telegram API
         response = requests.post(url, json=payload, timeout=10)
@@ -191,12 +303,23 @@ def send_telegram_notification(
         # Check if request was successful
         if response.status_code == 200:
             result = response.json()
-            return result.get('ok', False)
+            success = result.get('ok', False)
+            if success:
+                if logger:
+                    logger.info("Message sent successfully to Telegram")
+            else:
+                if logger:
+                    logger.error(f"Telegram API returned ok=False: {result}")
+            return success
         else:
+            if logger:
+                logger.error(f"Telegram API returned status code {response.status_code}: {response.text}")
             return False
             
-    except Exception:
+    except Exception as e:
         # Handle any network or parsing errors
+        if logger:
+            logger.error(f"Failed to send Telegram notification: {e}", exc_info=True)
         return False
 
 
