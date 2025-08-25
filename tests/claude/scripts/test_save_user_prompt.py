@@ -8,7 +8,7 @@ import json
 import pytest
 from pathlib import Path
 from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, call
 import tempfile
 
 # Add parent directory to path to import save_user_prompt
@@ -25,51 +25,120 @@ from save_user_prompt import (
 class TestSaveUserPrompt:
     """Test class for save_user_prompt.py functions"""
 
-    def test_get_postgres_connection_with_dsn(self):
-        """
-        TODO for task 2: Test PostgreSQL connection using DSN
-        - Mock environment variable CLAUDE_POSTGRES_SERVER_DSN
-        - Mock psycopg3.connect
-        - Verify SSL/TLS configuration
-        - Assert connection object returned
-        """
-        pass
+    @patch.dict(os.environ, {'CLAUDE_POSTGRES_SERVER_DSN': 'postgresql://user:pass@localhost/db'})
+    @patch('psycopg.connect')
+    def test_get_postgres_connection_with_dsn(self, mock_connect):
+        """Test PostgreSQL connection using DSN"""
+        mock_conn = Mock()
+        mock_connect.return_value = mock_conn
+        
+        result = get_postgres_connection()
+        
+        # Verify connection was attempted with DSN and SSL
+        mock_connect.assert_called_once()
+        call_args = mock_connect.call_args[0][0]
+        assert 'sslmode=require' in call_args
+        assert 'postgresql://user:pass@localhost/db' in call_args
+        assert result == mock_conn
 
-    def test_get_postgres_connection_with_individual_vars(self):
-        """
-        TODO for task 2: Test PostgreSQL connection using individual environment variables
-        - Mock CLAUDE_POSTGRES_SERVER_HOST_PORT
-        - Mock CLAUDE_POSTGRES_SERVER_USER
-        - Mock CLAUDE_POSTGRES_SERVER_PASS
-        - Mock CLAUDE_POSTGRES_SERVER_DB_NAME
-        - Mock psycopg3.connect
-        - Verify connection string construction
-        - Assert connection object returned
-        """
-        pass
+    @patch.dict(os.environ, {
+        'CLAUDE_POSTGRES_SERVER_HOST_PORT': 'localhost:5432',
+        'CLAUDE_POSTGRES_SERVER_USER': 'testuser',
+        'CLAUDE_POSTGRES_SERVER_PASS': 'testpass',
+        'CLAUDE_POSTGRES_SERVER_DB_NAME': 'testdb'
+    })
+    @patch('psycopg.connect')
+    def test_get_postgres_connection_with_individual_vars(self, mock_connect):
+        """Test PostgreSQL connection using individual environment variables"""
+        mock_conn = Mock()
+        mock_connect.return_value = mock_conn
+        
+        result = get_postgres_connection()
+        
+        # Verify connection was attempted with correct parameters
+        mock_connect.assert_called_once()
+        call_args = mock_connect.call_args[0][0]
+        assert 'host=localhost' in call_args
+        assert 'port=5432' in call_args
+        assert 'dbname=testdb' in call_args
+        assert 'user=testuser' in call_args
+        assert 'password=testpass' in call_args
+        assert 'sslmode=require' in call_args
+        assert result == mock_conn
 
-    def test_get_postgres_connection_dsn_precedence(self):
-        """
-        TODO for task 2: Test that DSN takes precedence over individual variables
-        - Set both DSN and individual environment variables
-        - Verify DSN is used
-        """
-        pass
+    @patch.dict(os.environ, {
+        'CLAUDE_POSTGRES_SERVER_DSN': 'postgresql://dsnuser:dsnpass@dsnhost/dsndb',
+        'CLAUDE_POSTGRES_SERVER_HOST_PORT': 'localhost:5432',
+        'CLAUDE_POSTGRES_SERVER_USER': 'testuser',
+        'CLAUDE_POSTGRES_SERVER_PASS': 'testpass',
+        'CLAUDE_POSTGRES_SERVER_DB_NAME': 'testdb'
+    })
+    @patch('psycopg.connect')
+    def test_get_postgres_connection_dsn_precedence(self, mock_connect):
+        """Test that DSN takes precedence over individual variables"""
+        mock_conn = Mock()
+        mock_connect.return_value = mock_conn
+        
+        result = get_postgres_connection()
+        
+        # Verify DSN was used, not individual vars
+        mock_connect.assert_called_once()
+        call_args = mock_connect.call_args[0][0]
+        assert 'postgresql://dsnuser:dsnpass@dsnhost/dsndb' in call_args
+        assert 'testuser' not in call_args
+        assert result == mock_conn
 
-    def test_get_postgres_connection_ssl_enabled(self):
-        """
-        TODO for task 2: Test that SSL/TLS is always enabled
-        - Verify 'sslmode=require' in connection parameters
-        """
-        pass
+    @patch.dict(os.environ, {'CLAUDE_POSTGRES_SERVER_DSN': 'postgresql://user:pass@localhost/db'})
+    @patch('psycopg.connect')
+    def test_get_postgres_connection_ssl_enabled(self, mock_connect):
+        """Test that SSL/TLS is always enabled"""
+        mock_conn = Mock()
+        mock_connect.return_value = mock_conn
+        
+        result = get_postgres_connection()
+        
+        # Verify sslmode=require is added
+        mock_connect.assert_called_once()
+        call_args = mock_connect.call_args[0][0]
+        assert 'sslmode=require' in call_args
+        assert result == mock_conn
 
-    def test_get_postgres_connection_failure_handling(self):
-        """
-        TODO for task 2: Test connection failure handling
-        - Mock connection to raise exception
-        - Verify None is returned (not exception raised)
-        """
-        pass
+    @patch.dict(os.environ, {'CLAUDE_POSTGRES_SERVER_DSN': 'postgresql://user:pass@localhost/db'})
+    @patch('psycopg.connect')
+    def test_get_postgres_connection_failure_handling(self, mock_connect):
+        """Test connection failure handling"""
+        mock_connect.side_effect = Exception("Connection failed")
+        
+        result = get_postgres_connection()
+        
+        # Verify None is returned on failure, not exception
+        assert result is None
+        mock_connect.assert_called_once()
+    
+    @patch.dict(os.environ, {}, clear=True)
+    def test_get_postgres_connection_no_config(self):
+        """Test when no PostgreSQL configuration is present"""
+        result = get_postgres_connection()
+        assert result is None
+    
+    @patch.dict(os.environ, {'CLAUDE_POSTGRES_SERVER_HOST_PORT': 'localhost'})
+    @patch('psycopg.connect')
+    def test_get_postgres_connection_default_port(self, mock_connect):
+        """Test default port 5432 is used when not specified"""
+        mock_conn = Mock()
+        mock_connect.return_value = mock_conn
+        
+        # Set other required vars
+        os.environ['CLAUDE_POSTGRES_SERVER_USER'] = 'user'
+        os.environ['CLAUDE_POSTGRES_SERVER_PASS'] = 'pass'
+        os.environ['CLAUDE_POSTGRES_SERVER_DB_NAME'] = 'db'
+        
+        result = get_postgres_connection()
+        
+        # Verify default port was used
+        call_args = mock_connect.call_args[0][0]
+        assert 'port=5432' in call_args
+        assert result == mock_conn
 
     def test_save_to_postgres_success(self):
         """
