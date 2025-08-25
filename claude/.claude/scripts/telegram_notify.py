@@ -248,23 +248,12 @@ def format_telegram_message(
     parts.append(f"")
     parts.append(f"💬 *Message:*")
     parts.append(f"")
-
-    # Calculate available space for message (4096 char limit minus metadata)
-    metadata_length = sum(len(part) for part in parts) + \
-        10  # Extra for newlines and closing ```
-    available_space = 4096 - metadata_length - 50  # Safety margin
-
-    # Truncate message if needed
-    if len(message_text) > available_space:
-        original_length = len(message_text)
-        message_text = message_text[:available_space - 3] + "..."
-        if logger:
-            logger.info(
-                f"Message truncated from {original_length} to {len(message_text)} characters")
-
     parts.append(message_text)
 
     formatted_message = "\n".join(parts)
+
+    # Truncate to message length (4096 char limit minus metadata)
+    truncated_message = formatted_message[:4096]
 
     if logger:
         logger.info(
