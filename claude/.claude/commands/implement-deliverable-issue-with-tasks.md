@@ -16,3 +16,5 @@ Adherence to all of the following rules is non-negotiable, and all means
   Open the PRs as you are ready with the tasks, but do not merge them.
 - **Keep everyone informerd:**
   Post updates to the issue after every task as issue comments.
+- **No task is left behind:**
+  Do NOT stop until you are done with all the tasks in the issue, except if you got blocked by some external factor.
