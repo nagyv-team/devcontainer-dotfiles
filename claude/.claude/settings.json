@@ -17,6 +17,20 @@
           {
             "type": "command",
             "command": "jq -r .message | say"
+          },
+          {
+            "type": "command",
+            "command": "${HOME}/.venv_dotfiles/bin/python ${HOME}/.claude/scripts/telegram_notify.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/.venv_dotfiles/bin/python ${HOME}/.claude/scripts/telegram_notify.py"
           }
         ]
       }

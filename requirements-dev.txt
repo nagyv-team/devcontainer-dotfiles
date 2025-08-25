@@ -1,5 +1,4 @@
 # Development dependencies
 pytest>=7.0.0
 pytest-mock>=3.0.0
-# TODO for task 4: Add pytest-bdd if not present
-# pytest-bdd>=6.0.0
+pytest-bdd>=6.0.0

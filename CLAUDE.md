@@ -20,8 +20,10 @@ The repository is designed to be installed via DevPod, which runs `./install.sh`
 - `claude/.claude/` - Claude Code configuration files
   - `agents/` - Custom agent definitions (python-backend-architect, bdd-test-engineer, react-native-architect)
   - `commands/` - Custom slash commands for various workflows
-  - `scripts/` - Hook scripts (e.g., save_user_prompt.py)
+  - `scripts/` - Hook scripts (e.g., save_user_prompt.py, telegram_notify.py)
   - `settings.json` - Hook configurations
+- `docs/` - Documentation for features and integrations
+  - `telegram-notifications.md` - Setup guide for Telegram notifications
 - `home/` - User home directory configurations
 
 ## Python Development
@@ -52,7 +54,8 @@ bash ./bin/copy_dotfiles.sh
 
 The repository configures Claude Code hooks via `claude/.claude/settings.json`:
 - UserPromptSubmit hook: Saves user prompts using `save_user_prompt.py`
-- Notification hook: Uses `say` command for audio notifications
+- Notification hook: Uses `say` command for audio notifications and sends Telegram notifications via `telegram_notify.py`
+- Stop hook: Sends Telegram notifications when sessions end using `telegram_notify.py`
 
 ## Important Guidelines
 
