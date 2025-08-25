@@ -341,13 +341,13 @@ def main():
 Environment Variables:
   CLAUDE_TELEGRAM_BOT_ID    Your Telegram bot token
   CLAUDE_TELEGRAM_CHAT_ID   Your Telegram chat/channel ID
-  CLAUDE_PROJECT_DIR        Project directory path (optional)
-  CLAUDE_SESSION_ID         Session ID (optional)
-  CLAUDE_TRANSCRIPT_PATH    Path to transcript file (optional)
+  CLAUDE_PROJECT_DIR        Project directory path (optional, overridden by hook data)
+  CLAUDE_SESSION_ID         Session ID (optional, overridden by hook data)
 
 Usage:
   As a hook in Claude Code settings.json:
     python telegram_notify.py
+    (Receives JSON event data via stdin with transcript_path, session_id, cwd, etc.)
 
   For testing with a specific transcript:
     python telegram_notify.py --transcript /path/to/transcript.jsonl
@@ -413,17 +413,40 @@ Usage:
                 # Parse the transcript from file
                 message_text = parse_claude_transcript(transcript_file, logger)
             else:
-                # Read transcript path from stdin (default for Claude Code hooks)
-                logger.info("Reading transcript path from stdin")
+                # Read hook event data from stdin (default for Claude Code hooks)
+                logger.info("Reading hook event data from stdin")
                 try:
-                    transcript_file = sys.stdin.read().strip()
-                    if transcript_file:
-                        logger.info(f"Using transcript file from stdin: {transcript_file}")
-                        # Parse the transcript from file
-                        message_text = parse_claude_transcript(transcript_file, logger)
-                    else:
-                        logger.warning("No transcript path received from stdin. Exiting.")
+                    stdin_data = sys.stdin.read().strip()
+                    if not stdin_data:
+                        logger.warning("No data received from stdin. Exiting.")
                         return 1
+                    
+                    # Parse the JSON event data
+                    event_data = json.loads(stdin_data)
+                    logger.debug(f"Received event data: {event_data}")
+                    
+                    # Extract transcript path from the event data
+                    transcript_file = event_data.get('transcript_path')
+                    if not transcript_file:
+                        logger.warning("No transcript_path in event data. Exiting.")
+                        return 1
+                    
+                    logger.info(f"Using transcript file from event data: {transcript_file}")
+                    
+                    # Override session_id and project_dir with event data values when available
+                    if 'session_id' in event_data:
+                        session_id = event_data['session_id']
+                        logger.info(f"Using session_id from event data: {session_id}")
+                    
+                    if 'cwd' in event_data:
+                        project_dir = event_data['cwd']
+                        logger.info(f"Using cwd as project_dir from event data: {project_dir}")
+                    
+                    # Parse the transcript from file
+                    message_text = parse_claude_transcript(transcript_file, logger)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error parsing JSON from stdin: {e}")
+                    return 1
                 except Exception as e:
                     logger.error(f"Error reading from stdin: {e}")
                     return 1

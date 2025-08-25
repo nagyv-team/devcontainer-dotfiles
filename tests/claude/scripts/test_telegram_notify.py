@@ -678,6 +678,36 @@ class TestCLISupport:
                     result = main()
                     assert result == 1  # Should fail when stdin is empty
     
+    def test_stdin_invalid_json(self):
+        """Test when stdin contains invalid JSON."""
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py']):
+                with patch('sys.stdin') as mock_stdin:
+                    mock_stdin.read.return_value = 'not valid json'
+                    
+                    result = main()
+                    assert result == 1  # Should fail with invalid JSON
+    
+    def test_stdin_missing_transcript_path(self):
+        """Test when stdin JSON doesn't contain transcript_path."""
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
+        }):
+            with patch('sys.argv', ['telegram_notify.py']):
+                with patch('sys.stdin') as mock_stdin:
+                    mock_stdin.read.return_value = json.dumps({
+                        'session_id': 'test123',
+                        'cwd': '/test/dir'
+                        # missing transcript_path
+                    })
+                    
+                    result = main()
+                    assert result == 1  # Should fail without transcript_path
+    
     def test_stdin_error(self):
         """Test when reading from stdin fails."""
         with patch.dict(os.environ, {
@@ -691,16 +721,54 @@ class TestCLISupport:
                     result = main()
                     assert result == 1  # Should fail gracefully
     
+    def test_stdin_overrides_environment(self):
+        """Test that stdin JSON data overrides environment variables."""
+        with patch.dict(os.environ, {
+            'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
+            'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat',
+            'CLAUDE_PROJECT_DIR': '/env/project',
+            'CLAUDE_SESSION_ID': 'env_session'
+        }):
+            with patch('sys.argv', ['telegram_notify.py']):
+                with patch('sys.stdin') as mock_stdin:
+                    mock_stdin.read.return_value = json.dumps({
+                        'session_id': 'stdin_session',
+                        'transcript_path': '/tmp/transcript.jsonl',
+                        'cwd': '/stdin/project',
+                        'hook_event_name': 'Notification'
+                    })
+                    with patch('telegram_notify.parse_claude_transcript') as mock_parse:
+                        mock_parse.return_value = "Test message"
+                        with patch('telegram_notify.format_telegram_message') as mock_format:
+                            mock_format.return_value = "Formatted message"
+                            with patch('telegram_notify.send_telegram_notification') as mock_send:
+                                mock_send.return_value = True
+                                
+                                result = main()
+                                assert result == 0
+                                
+                                # Check that format was called with stdin values, not env values
+                                mock_format.assert_called_once()
+                                call_args = mock_format.call_args
+                                assert call_args[1]['project_dir'] == '/stdin/project'
+                                assert call_args[1]['session_id'] == 'stdin_session'
+    
     def test_hook_mode_vs_standalone(self):
         """Test difference between hook mode and standalone execution."""
-        # Hook mode (no arguments, reads from stdin)
+        # Hook mode (no arguments, reads JSON from stdin)
         with patch.dict(os.environ, {
             'CLAUDE_TELEGRAM_BOT_ID': 'test_bot',
             'CLAUDE_TELEGRAM_CHAT_ID': 'test_chat'
         }):
             with patch('sys.argv', ['telegram_notify.py']):
                 with patch('sys.stdin') as mock_stdin:
-                    mock_stdin.read.return_value = '/tmp/transcript.jsonl'
+                    mock_stdin.read.return_value = json.dumps({
+                        'session_id': 'abc123',
+                        'transcript_path': '/tmp/transcript.jsonl',
+                        'cwd': '/test/project',
+                        'hook_event_name': 'Notification',
+                        'message': 'Task completed successfully'
+                    })
                     with patch('telegram_notify.parse_claude_transcript') as mock_parse:
                         mock_parse.return_value = "Hook message"
                         with patch('telegram_notify.send_telegram_notification') as mock_send:
@@ -708,7 +776,7 @@ class TestCLISupport:
                             
                             result = main()
                             assert result == 0
-                            # Check that parse was called with the transcript path from stdin
+                            # Check that parse was called with the transcript path from JSON
                             assert mock_parse.called
                             assert mock_parse.call_args[0][0] == '/tmp/transcript.jsonl'
         
