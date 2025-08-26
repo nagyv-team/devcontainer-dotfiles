@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# DevSecOps Parallel Issue Task Processor
+# Usage: ./parallel-issue-tasks.sh <ISSUE_ID> <X>
+# Example: ./parallel-issue-tasks.sh 47 4
+
+set -euo pipefail
+
+# Validate arguments
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <ISSUE_ID> <X>"
+    echo "  ISSUE_ID: Issue number (e.g., 47)"
+    echo "  X: Number of parallel tasks (e.g., 4)"
+    exit 1
+fi
+
+ISSUE_ID="$1"
+X="$2"
+
+# Validate inputs are numbers
+if ! [[ "$ISSUE_ID" =~ ^[0-9]+$ ]] || ! [[ "$X" =~ ^[0-9]+$ ]]; then
+    echo "Error: Both arguments must be positive integers"
+    echo "  ISSUE_ID: $ISSUE_ID"
+    echo "  X: $X"
+    exit 1
+fi
+
+if [ "$X" -lt 1 ]; then
+    echo "Error: X must be at least 1"
+    exit 1
+fi
+
+echo "Starting $X parallel tasks for issue #$ISSUE_ID"
+echo "Processes will run in background and create worktrees:"
+
+# Function to process a single task
+process_task() {
+    local task_number=$1
+    local issue_id=$2
+    local worktree_path="../issue-${issue_id}-task-${task_number}"
+    
+    echo "Task $task_number: Creating worktree $worktree_path"
+    
+    # Create git worktree
+    git worktree add -b issue-$issue_id-task-$task_number "$worktree_path" 2>/dev/null || {
+        echo "Task $task_number: Failed to create worktree $worktree_path"
+        return 1
+    }
+    
+    # Change to the worktree directory
+    cd "$worktree_path" || {
+        echo "Task $task_number: Failed to change directory to $worktree_path"
+        return 1
+    }
+    
+    echo "Task $task_number: Running claude-session in $worktree_path"
+    
+    # Run claude-session with the specified prompt
+    export CLAUDE_SESSION_ID=$(uuidgen) && claude --session-id $CLAUDE_SESSION_ID --dangerously-skip-permissions -p "/implement-single-task $task_number of issue #$issue_id" || {
+        echo "Task $task_number: claude-session failed"
+        return 1
+    }
+    
+    echo "Task $task_number: Completed successfully"
+}
+
+# Start all tasks in parallel
+for ((i=1; i<=X; i++)); do
+    echo "  ../issue-${ISSUE_ID}-task-${i}"
+    # Run each task in background
+    process_task "$i" "$ISSUE_ID" &
+done
+
+echo ""
+echo "All $X tasks started in parallel for issue #$ISSUE_ID"
+echo "Script will exit immediately. Tasks continue running in background."
+echo ""
+echo "To monitor progress, check the worktree directories or use:"
+echo "  ps aux | grep claude-session"
+echo "  jobs -l  # (if tasks were started from this shell)"
+
+# Exit immediately - background processes continue
+exit 0
