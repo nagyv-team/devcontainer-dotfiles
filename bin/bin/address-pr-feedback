@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# DevSecOps Parallel Issue Task Processor
+# Usage: ./parallel-issue-tasks.sh <ISSUE_ID> <X>
+# Example: ./parallel-issue-tasks.sh 47 4
+
+set -euo pipefail
+
+# Validate arguments
+if [ $# -ne 3 ]; then
+    echo "Usage: $0 <ISSUE_ID> <X> <PR_ID>"
+    echo "  ISSUE_ID: Issue number (e.g., 47)"
+    echo "  TASK: Number of parallel tasks (e.g., 4)"
+    echo "  PR_ID: PR number (e.g., 4)"
+    exit 1
+fi
+
+ISSUE_ID="$1"
+TASK="$2"
+PR_ID="$3"
+
+# Validate inputs are numbers
+if ! [[ "$ISSUE_ID" =~ ^[0-9]+$ ]] || ! [[ "$TASK" =~ ^[0-9]+$ ]] || ! [[ "$PR_ID" =~ ^[0-9]+$ ]]; then
+    echo "Error: Both arguments must be positive integers"
+    echo "  ISSUE_ID: $ISSUE_ID"
+    echo "  TASK: $TASK"
+    echo "  PR_ID: $PR_ID"
+    exit 1
+fi
+
+if [ "$TASK" -lt 1 ]; then
+    echo "Error: X must be at least 1"
+    exit 1
+fi
+
+cd ../issue-$ISSUE_ID-task-$TASK
+claude -c --dangerously-skip-permissions -p "/address-pr-feedback $PR_ID" &
+
+echo "Feedback process started"
