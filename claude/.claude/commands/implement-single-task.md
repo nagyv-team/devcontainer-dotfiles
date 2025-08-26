@@ -12,7 +12,7 @@ Adherence to all of the following rules is non-negotiable, and all means **all**
   Avoid Captain Obvious style comments. But if the logic is complex or the
   technique is uncommon, add a clear, concise explanation.
 - **Leave the final decision to humans:**
-  Open the PRs as you are ready with your task, but do not merge them.
+  Open the related PR as you are ready with your task, but do not merge it.
 - **Keep everyone informerd:**
   Post updates to the issue after your task as issue comments.
 - **No task is left behind:**
