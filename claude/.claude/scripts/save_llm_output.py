@@ -43,10 +43,35 @@ def parse_hook_input() -> Dict[str, Any]:
     Raises:
         json.JSONDecodeError: If stdin contains invalid JSON
         ValueError: If required fields are missing
-    
-    TODO for task 1: Implement JSON parsing and validation logic
     """
-    pass  # TODO for task 1: Read JSON from stdin, validate required fields, return parsed data
+    try:
+        # Read JSON from stdin
+        hook_data = json.load(sys.stdin)
+        logger.debug(f"Received hook data: {hook_data}")
+        
+        # Validate required fields
+        required_fields = ['transcript_path', 'hook_event_name']
+        missing_fields = [field for field in required_fields if field not in hook_data]
+        
+        if missing_fields:
+            raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+        
+        # Validate hook event name
+        if hook_data['hook_event_name'] != 'Stop':
+            raise ValueError(f"Expected Stop hook, got {hook_data['hook_event_name']}")
+        
+        # Expand transcript path if it contains ~
+        if 'transcript_path' in hook_data:
+            hook_data['transcript_path'] = os.path.expanduser(hook_data['transcript_path'])
+        
+        return hook_data
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON from stdin: {e}")
+        raise
+    except ValueError as e:
+        logger.error(f"Invalid hook input: {e}")
+        raise
 
 
 def read_transcript_file(transcript_path: str) -> Optional[Dict[str, Any]]:
@@ -58,14 +83,48 @@ def read_transcript_file(transcript_path: str) -> Optional[Dict[str, Any]]:
         
     Returns:
         The last assistant message dict or None if not found
-        
-    TODO for task 1: Implement file reading and parsing logic
-    - Handle file not found
-    - Parse JSONL line by line
-    - Handle malformed JSON gracefully (skip bad lines)
-    - Return last assistant message
     """
-    pass  # TODO for task 1: Read JSONL file, find last assistant message
+    transcript_path = Path(transcript_path)
+    
+    # Check if file exists
+    if not transcript_path.exists():
+        logger.error(f"Transcript file not found: {transcript_path}")
+        return None
+    
+    try:
+        # Read all lines at once for reverse iteration
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        # Process lines in reverse to find the last assistant message
+        for line_num, line in enumerate(reversed(lines), 1):
+            line = line.strip()
+            if not line:
+                continue
+            
+            try:
+                # Parse JSON line
+                data = json.loads(line)
+                
+                # Check if this is an assistant message and return immediately
+                if data.get('type') == 'assistant' and 'message' in data:
+                    logger.debug(f"Found last assistant message at line {len(lines) - line_num + 1}")
+                    return data
+                    
+            except json.JSONDecodeError as e:
+                # Skip malformed lines
+                logger.debug(f"Skipping malformed JSON at line {len(lines) - line_num + 1}: {e}")
+                continue
+            except Exception as e:
+                logger.debug(f"Error processing line {len(lines) - line_num + 1}: {e}")
+                continue
+    
+    except Exception as e:
+        logger.error(f"Error reading transcript file: {e}")
+        return None
+    
+    logger.warning(f"No assistant message found in transcript: {transcript_path}")
+    return None
 
 
 def extract_llm_metadata(assistant_message: Dict[str, Any]) -> Dict[str, Any]:
@@ -95,10 +154,54 @@ def extract_llm_metadata(assistant_message: Dict[str, Any]) -> Dict[str, Any]:
         - input_tokens: Input token count (nullable)
         - output_tokens: Output token count (nullable)
         - service_tier: Service tier (nullable)
-        
-    TODO for task 1: Implement metadata extraction logic
     """
-    pass  # TODO for task 1: Extract text content and usage statistics from message
+    metadata = {
+        'output': None,
+        'model': None,
+        'input_tokens': None,
+        'output_tokens': None,
+        'service_tier': None
+    }
+    
+    if not assistant_message or 'message' not in assistant_message:
+        logger.warning("No message field in assistant_message")
+        return metadata
+    
+    message = assistant_message['message']
+    
+    # Extract text content
+    if 'content' in message and isinstance(message['content'], list):
+        text_parts = []
+        for content_item in message['content']:
+            if isinstance(content_item, dict) and content_item.get('type') == 'text':
+                text_parts.append(content_item.get('text', ''))
+        
+        if text_parts:
+            metadata['output'] = '\n'.join(text_parts)
+            logger.debug(f"Extracted output text of length {len(metadata['output'])}")
+    
+    # Extract model
+    if 'model' in message:
+        metadata['model'] = message['model']
+        logger.debug(f"Extracted model: {metadata['model']}")
+    
+    # Extract usage statistics
+    if 'usage' in message and isinstance(message['usage'], dict):
+        usage = message['usage']
+        
+        if 'input_tokens' in usage:
+            metadata['input_tokens'] = usage['input_tokens']
+            logger.debug(f"Extracted input_tokens: {metadata['input_tokens']}")
+        
+        if 'output_tokens' in usage:
+            metadata['output_tokens'] = usage['output_tokens']
+            logger.debug(f"Extracted output_tokens: {metadata['output_tokens']}")
+        
+        if 'service_tier' in usage:
+            metadata['service_tier'] = usage['service_tier']
+            logger.debug(f"Extracted service_tier: {metadata['service_tier']}")
+    
+    return metadata
 
 
 def get_postgres_connection():
