@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(git push origin:*)",
       "Bash(gh issue view:*)",
       "Bash(gh pr list:*)",
       "Bash(gh pr view:*)",
