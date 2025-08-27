@@ -1,4 +1,16 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(gh issue view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(kubectl get:*)",
+      "Bash(kubectl describe:*)",
+      "Bash(kubectl logs:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
