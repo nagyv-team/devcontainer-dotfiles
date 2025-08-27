@@ -27,6 +27,11 @@
           {
             "type": "command",
             "command": "${HOME}/.venv_dotfiles/bin/python ${HOME}/.claude/scripts/telegram_notify.py"
+          },
+          {
+            "type": "command",
+            "command": "${HOME}/.venv_dotfiles/bin/python ${HOME}/.claude/scripts/save_llm_output.py",
+            "comment": "TODO for task 3: Add this hook after implementation is complete"
           }
         ]
       }
