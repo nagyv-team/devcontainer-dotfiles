@@ -14,23 +14,12 @@ from io import StringIO
 from datetime import datetime
 import logging
 
+# Add the scripts directory to the path
+scripts_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'claude', '.claude', 'scripts')
+sys.path.insert(0, scripts_path)
+
 import save_llm_output
 
-# Add the scripts directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'claude', '.claude', 'scripts'))
-
-class TestParseHookInput:
-    """Test cases for parse_hook_input function"""
-    
-    def test_valid_hook_input(self):
-        """Test parsing valid hook input with all fields"""
-        hook_data = {
-            "session_id": "abc123",
-            "transcript_path": "~/.claude/projects/test/transcript.jsonl",
-
-
-# Create mock implementations for now since the functions aren't implemented yet
-# These will be replaced with actual imports once implementation is complete
 class MockSaveLLMOutput:
     """Mock implementation for testing."""
     
@@ -124,7 +113,7 @@ class TestParseHookInput:
             "cwd": "/workspaces/project"
         }
         
-        with patch('sys.stdin', StringIO(json.dumps(hook_data))):
+        with patch('sys.stdin', StringIO(json.dumps(input_data))):
             result = save_llm_output.parse_hook_input()
         
         assert result['session_id'] == 'abc123'
@@ -385,32 +374,18 @@ class TestExtractLLMMetadata:
         """Test extracting metadata with empty content array"""
         assistant_message = {
             "type": "assistant",
-        monkeypatch.setattr('sys.stdin', StringIO(json.dumps(input_data)))
+            "message": {
+                "content": []  # Empty content array
+            }
+        }
         
-        result = parse_hook_input()
-        assert result == input_data
-    
-    def test_missing_required_fields(self, monkeypatch):
-        """Test missing required fields raises ValueError."""
-        input_data = {"session_id": "abc123"}
-        monkeypatch.setattr('sys.stdin', StringIO(json.dumps(input_data)))
+        result = save_llm_output.extract_llm_metadata(assistant_message)
         
-        with pytest.raises(ValueError, match="required field"):
-            parse_hook_input()
-    
-    def test_invalid_json(self, monkeypatch):
-        """Test invalid JSON raises JSONDecodeError."""
-        monkeypatch.setattr('sys.stdin', StringIO("not json"))
-        
-        with pytest.raises(json.JSONDecodeError):
-            parse_hook_input()
-    
-    def test_empty_input(self, monkeypatch):
-        """Test empty input raises error."""
-        monkeypatch.setattr('sys.stdin', StringIO(""))
-        
-        with pytest.raises((json.JSONDecodeError, ValueError)):
-            parse_hook_input()
+        assert result['output'] is None
+        assert result['model'] is None
+        assert result['input_tokens'] is None
+        assert result['output_tokens'] is None
+        assert result['service_tier'] is None
 
 
 class TestReadTranscriptFile:
@@ -856,6 +831,185 @@ class TestMainFunction:
         with patch('sys.exit') as mock_exit:
             main()
             mock_exit.assert_called_once_with(1)
+    
+    @patch('sys.stdin', StringIO(json.dumps({
+        "session_id": "test123",
+        "transcript_path": "/tmp/test.jsonl",
+        "hook_event_name": "Stop",
+        "cwd": "/workspaces/test"
+    })))
+    @patch('save_llm_output.read_transcript_file')
+    @patch('save_llm_output.extract_llm_metadata')
+    def test_no_output_in_message(self, mock_extract, mock_read):
+        """Test handling when no output text is found."""
+        mock_read.return_value = {"type": "assistant", "message": {}}
+        mock_extract.return_value = {"output": None}  # No output text
+        
+        with patch('sys.exit') as mock_exit:
+            main()
+            mock_exit.assert_called_once_with(0)  # Should exit gracefully
+    
+    @patch('sys.stdin', StringIO(json.dumps({
+        "session_id": "test123",
+        "transcript_path": "/tmp/test.jsonl",
+        "hook_event_name": "Stop",
+        "cwd": "/workspaces/test"
+    })))
+    @patch('save_llm_output.read_transcript_file')
+    def test_no_assistant_message_found(self, mock_read):
+        """Test handling when no assistant message is found."""
+        mock_read.return_value = None
+        
+        with patch('sys.exit') as mock_exit:
+            main()
+            mock_exit.assert_called_once_with(0)  # Should exit gracefully
+    
+    @patch('sys.stdin', StringIO(json.dumps({
+        "session_id": "test123",
+        "transcript_path": "/tmp/test.jsonl",
+        "hook_event_name": "Stop",
+        "cwd": "/workspaces/test"
+    })))
+    @patch('save_llm_output.read_transcript_file')
+    @patch('save_llm_output.extract_llm_metadata')
+    @patch('save_llm_output.get_postgres_connection')
+    def test_database_connection_failure(self, mock_conn, mock_extract, mock_read):
+        """Test handling of database connection failure."""
+        mock_read.return_value = {"type": "assistant", "message": {}}
+        mock_extract.return_value = {"output": "Test"}
+        mock_conn.return_value = None  # Connection failed
+        
+        with patch('sys.exit') as mock_exit:
+            main()
+            mock_exit.assert_called_once_with(1)  # Should exit with error
+    
+    @patch('sys.stdin', StringIO(json.dumps({
+        "session_id": "test123",
+        "transcript_path": "/tmp/test.jsonl",
+        "hook_event_name": "Stop",
+        "cwd": "/workspaces/test"
+    })))
+    @patch('save_llm_output.read_transcript_file')
+    @patch('save_llm_output.extract_llm_metadata')
+    @patch('save_llm_output.get_postgres_connection')
+    @patch('save_llm_output.extract_repository_from_git')
+    @patch('save_llm_output.save_llm_output_to_postgres')
+    def test_database_save_failure(self, mock_save, mock_repo, mock_conn,
+                                  mock_extract, mock_read):
+        """Test handling of database save failure."""
+        mock_read.return_value = {"type": "assistant", "message": {}}
+        mock_extract.return_value = {"output": "Test"}
+        mock_conn.return_value = Mock()
+        mock_repo.return_value = "github.com/test/repo"
+        mock_save.return_value = False  # Save failed
+        
+        with patch('sys.exit') as mock_exit:
+            main()
+            mock_exit.assert_called_once_with(1)  # Should exit with error
+    
+    @patch('sys.stdin', StringIO(json.dumps({
+        "transcript_path": "/tmp/test.jsonl",
+        "hook_event_name": "Stop",
+        "cwd": "/workspaces/test"
+    })))
+    @patch('save_llm_output.read_transcript_file')
+    @patch('save_llm_output.extract_llm_metadata')
+    @patch('save_llm_output.get_postgres_connection')
+    @patch('save_llm_output.extract_repository_from_git')
+    @patch('save_llm_output.save_llm_output_to_postgres')
+    def test_missing_session_id(self, mock_save, mock_repo, mock_conn,
+                               mock_extract, mock_read):
+        """Test handling when session_id is missing (should still work)."""
+        mock_read.return_value = {"type": "assistant", "message": {}}
+        mock_extract.return_value = {"output": "Test"}
+        mock_conn.return_value = Mock()
+        mock_repo.return_value = "github.com/test/repo"
+        mock_save.return_value = True
+        
+        with patch('sys.exit') as mock_exit:
+            main()
+            mock_exit.assert_called_once_with(0)  # Should succeed
+            # Verify save was called with None session_id
+            mock_save.assert_called_once()
+            saved_data = mock_save.call_args[0][1]
+            assert saved_data['session_id'] is None
+    
+    @patch('sys.stdin', StringIO(json.dumps({
+        "session_id": "test123",
+        "transcript_path": "/tmp/test.jsonl",
+        "hook_event_name": "Stop"
+    })))
+    @patch('save_llm_output.read_transcript_file')
+    @patch('save_llm_output.extract_llm_metadata')
+    @patch('save_llm_output.get_postgres_connection')
+    @patch('save_llm_output.extract_repository_from_git')
+    @patch('save_llm_output.save_llm_output_to_postgres')
+    def test_missing_cwd(self, mock_save, mock_repo, mock_conn,
+                        mock_extract, mock_read):
+        """Test handling when cwd is missing (repository should be None)."""
+        mock_read.return_value = {"type": "assistant", "message": {}}
+        mock_extract.return_value = {"output": "Test"}
+        mock_conn.return_value = Mock()
+        mock_repo.return_value = None  # No repository info
+        mock_save.return_value = True
+        
+        with patch('sys.exit') as mock_exit:
+            main()
+            mock_exit.assert_called_once_with(0)  # Should succeed
+            # Verify extract_repository was called with None
+            mock_repo.assert_called_once_with(None)
+    
+    @patch('sys.stdin', StringIO(json.dumps({
+        "session_id": "test123",
+        "transcript_path": "/tmp/test.jsonl",
+        "hook_event_name": "Stop",
+        "cwd": "/workspaces/test"
+    })))
+    @patch('save_llm_output.read_transcript_file')
+    @patch('save_llm_output.extract_llm_metadata')
+    @patch('save_llm_output.get_postgres_connection')
+    @patch('save_llm_output.extract_repository_from_git')
+    @patch('save_llm_output.save_llm_output_to_postgres')
+    def test_connection_close_on_success(self, mock_save, mock_repo, mock_conn,
+                                        mock_extract, mock_read):
+        """Test that database connection is closed after successful save."""
+        mock_read.return_value = {"type": "assistant", "message": {}}
+        mock_extract.return_value = {"output": "Test"}
+        mock_connection = Mock()
+        mock_conn.return_value = mock_connection
+        mock_repo.return_value = "github.com/test/repo"
+        mock_save.return_value = True
+        
+        with patch('sys.exit') as mock_exit:
+            main()
+            mock_exit.assert_called_once_with(0)
+            mock_connection.close.assert_called_once()
+    
+    @patch('sys.stdin', StringIO(json.dumps({
+        "session_id": "test123",
+        "transcript_path": "/tmp/test.jsonl",
+        "hook_event_name": "Stop",
+        "cwd": "/workspaces/test"
+    })))
+    @patch('save_llm_output.read_transcript_file')
+    @patch('save_llm_output.extract_llm_metadata')
+    @patch('save_llm_output.get_postgres_connection')
+    @patch('save_llm_output.extract_repository_from_git')
+    @patch('save_llm_output.save_llm_output_to_postgres')
+    def test_connection_close_on_failure(self, mock_save, mock_repo, mock_conn,
+                                        mock_extract, mock_read):
+        """Test that database connection is closed even after save failure."""
+        mock_read.return_value = {"type": "assistant", "message": {}}
+        mock_extract.return_value = {"output": "Test"}
+        mock_connection = Mock()
+        mock_conn.return_value = mock_connection
+        mock_repo.return_value = "github.com/test/repo"
+        mock_save.return_value = False  # Save fails
+        
+        with patch('sys.exit') as mock_exit:
+            main()
+            mock_exit.assert_called_once_with(1)
+            mock_connection.close.assert_called_once()  # Still closed
 
 
 class TestPerformance:
