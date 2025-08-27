@@ -84,7 +84,8 @@ def read_transcript_file(transcript_path: str) -> Optional[Dict[str, Any]]:
     Returns:
         The last assistant message dict or None if not found
     """
-    transcript_path = Path(transcript_path)
+    # Expand ~ in path before converting to Path
+    transcript_path = Path(os.path.expanduser(transcript_path))
     
     # Check if file exists
     if not transcript_path.exists():
@@ -177,7 +178,7 @@ def extract_llm_metadata(assistant_message: Dict[str, Any]) -> Dict[str, Any]:
                 text_parts.append(content_item.get('text', ''))
         
         if text_parts:
-            metadata['output'] = '\n'.join(text_parts)
+            metadata['output'] = ''.join(text_parts)
             logger.debug(f"Extracted output text of length {len(metadata['output'])}")
     
     # Extract model
@@ -427,6 +428,9 @@ def main():
     5. Save to PostgreSQL
     6. Handle errors appropriately (no fallback)
     """
+    exit_code = 0
+    connection = None
+    
     try:
         # Step 1: Parse hook input from stdin
         logger.info("Starting LLM output save process")
@@ -439,7 +443,8 @@ def main():
         
         if not transcript_path:
             logger.error("No transcript_path in hook data")
-            sys.exit(1)
+            exit_code = 1
+            return
         
         logger.debug(f"Processing transcript: {transcript_path}")
         logger.debug(f"Session ID: {session_id}")
@@ -449,14 +454,14 @@ def main():
         
         if not assistant_message:
             logger.info("No assistant message found in transcript, nothing to save")
-            sys.exit(0)
+            return  # Success - nothing to save
         
         # Step 3: Extract LLM output and metadata
         llm_metadata = extract_llm_metadata(assistant_message)
         
         if not llm_metadata.get('output'):
             logger.warning("No output text found in assistant message, nothing to save")
-            sys.exit(0)
+            return  # Success - nothing to save
         
         # Step 4: Get repository information from git context
         repository = extract_repository_from_git(cwd)
@@ -479,36 +484,38 @@ def main():
         
         if not connection:
             logger.error("Failed to establish PostgreSQL connection - no fallback mechanism")
-            sys.exit(1)
+            exit_code = 1
+            return
         
-        try:
-            # Step 7: Save to PostgreSQL
-            success = save_llm_output_to_postgres(connection, llm_data)
-            
-            if not success:
-                logger.error("Failed to save LLM output to database")
-                sys.exit(1)
-            
-            logger.info("LLM output saved successfully")
-            sys.exit(0)
-            
-        finally:
-            # Always close the database connection
+        # Step 7: Save to PostgreSQL
+        success = save_llm_output_to_postgres(connection, llm_data)
+        
+        if not success:
+            logger.error("Failed to save LLM output to database")
+            exit_code = 1
+            return
+        
+        logger.info("LLM output saved successfully")
+                
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON input: {e}")
+        exit_code = 1
+    except ValueError as e:
+        logger.error(f"Invalid hook input: {e}")
+        exit_code = 1
+    except Exception as e:
+        logger.error(f"Unexpected error in main: {e}")
+        exit_code = 1
+    finally:
+        # Always close the database connection if it was opened
+        if connection:
             try:
                 connection.close()
                 logger.debug("Database connection closed")
             except Exception as e:
                 logger.debug(f"Error closing connection: {e}")
-                
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON input: {e}")
-        sys.exit(1)
-    except ValueError as e:
-        logger.error(f"Invalid hook input: {e}")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Unexpected error in main: {e}")
-        sys.exit(1)
+        
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

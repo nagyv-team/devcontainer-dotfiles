@@ -554,7 +554,7 @@ class TestExtractLLMMetadata:
             }
         }
         
-        result = save_llm_output.extract_llm_metadata(assistant_message)
+        result = extract_llm_metadata(message)
         
         assert result['output'] is None
         assert result['model'] is None
@@ -607,7 +607,7 @@ class TestExtractLLMMetadata:
 class TestGetPostgresConnection:
     """Test get_postgres_connection function."""
     
-    @patch('psycopg2.connect')
+    @patch('psycopg.connect')
     def test_dsn_connection(self, mock_connect, monkeypatch):
         """Test connection using DSN."""
         dsn = "postgres://user:pass@localhost:5432/dbname?sslmode=require"
@@ -616,7 +616,7 @@ class TestGetPostgresConnection:
         get_postgres_connection()
         mock_connect.assert_called_once_with(dsn)
     
-    @patch('psycopg2.connect')
+    @patch('psycopg.connect')
     def test_individual_params_connection(self, mock_connect, monkeypatch):
         """Test connection using individual parameters."""
         monkeypatch.setenv("CLAUDE_POSTGRES_HOST_PORT", "localhost:5432")
@@ -644,7 +644,7 @@ class TestGetPostgresConnection:
         result = get_postgres_connection()
         assert result is None
     
-    @patch('psycopg2.connect', side_effect=Exception("Connection failed"))
+    @patch('psycopg.connect', side_effect=Exception("Connection failed"))
     def test_connection_failure(self, mock_connect, monkeypatch):
         """Test that connection failure returns None."""
         monkeypatch.setenv("CLAUDE_POSTGRES_SERVER_DSN", "postgres://localhost/db")
@@ -736,6 +736,8 @@ class TestSaveLLMOutputToPostgres:
         """Test save with nullable fields as None."""
         conn = Mock()
         cursor = Mock()
+        cursor.__enter__ = Mock(return_value=cursor)
+        cursor.__exit__ = Mock(return_value=None)
         conn.cursor.return_value = cursor
         
         data = {
