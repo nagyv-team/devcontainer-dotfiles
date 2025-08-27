@@ -4,4 +4,5 @@
 [ -f "$HOME/.aliases" ] && source ~/.aliases
 
 eval "$(direnv hook bash)"
-export PATH=$HOME/bin:$PATH
+
+export PATH=$HOME/bin:"${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
