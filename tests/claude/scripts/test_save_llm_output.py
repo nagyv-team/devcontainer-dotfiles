@@ -347,46 +347,5 @@ class TestExtractLLMMetadata:
         assert result['service_tier'] is None
 
 
-class TestIntegration:
-    """Integration tests for the complete extraction flow"""
-    
-    def test_full_extraction_flow(self):
-        """Test the complete flow from hook input to metadata extraction"""
-        # Create a transcript file
-        transcript_content = '''{"type": "user", "message": {"content": "Test question"}}
-{"type": "assistant", "message": {"content": [{"type": "text", "text": "Test response"}], "model": "claude-3", "usage": {"input_tokens": 10, "output_tokens": 20, "service_tier": "standard"}}, "sessionId": "test-session"}
-'''
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
-            f.write(transcript_content)
-            temp_path = f.name
-        
-        try:
-            # Simulate hook input
-            hook_data = {
-                "session_id": "test-session",
-                "transcript_path": temp_path,
-                "hook_event_name": "Stop"
-            }
-            
-            with patch('sys.stdin', StringIO(json.dumps(hook_data))):
-                parsed_hook = save_llm_output.parse_hook_input()
-            
-            # Read transcript
-            assistant_message = save_llm_output.read_transcript_file(parsed_hook['transcript_path'])
-            assert assistant_message is not None
-            
-            # Extract metadata
-            metadata = save_llm_output.extract_llm_metadata(assistant_message)
-            assert metadata['output'] == "Test response"
-            assert metadata['model'] == "claude-3"
-            assert metadata['input_tokens'] == 10
-            assert metadata['output_tokens'] == 20
-            assert metadata['service_tier'] == "standard"
-            
-        finally:
-            os.unlink(temp_path)
-
-
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

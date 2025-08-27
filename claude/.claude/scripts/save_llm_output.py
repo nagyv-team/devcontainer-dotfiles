@@ -91,40 +91,40 @@ def read_transcript_file(transcript_path: str) -> Optional[Dict[str, Any]]:
         logger.error(f"Transcript file not found: {transcript_path}")
         return None
     
-    last_assistant_message = None
-    
     try:
+        # Read all lines at once for reverse iteration
         with open(transcript_path, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
+            lines = f.readlines()
+        
+        # Process lines in reverse to find the last assistant message
+        for line_num, line in enumerate(reversed(lines), 1):
+            line = line.strip()
+            if not line:
+                continue
+            
+            try:
+                # Parse JSON line
+                data = json.loads(line)
                 
-                try:
-                    # Parse JSON line
-                    data = json.loads(line)
+                # Check if this is an assistant message and return immediately
+                if data.get('type') == 'assistant' and 'message' in data:
+                    logger.debug(f"Found last assistant message at line {len(lines) - line_num + 1}")
+                    return data
                     
-                    # Check if this is an assistant message
-                    if data.get('type') == 'assistant' and 'message' in data:
-                        last_assistant_message = data
-                        logger.debug(f"Found assistant message at line {line_num}")
-                        
-                except json.JSONDecodeError as e:
-                    # Skip malformed lines
-                    logger.debug(f"Skipping malformed JSON at line {line_num}: {e}")
-                    continue
-                except Exception as e:
-                    logger.debug(f"Error processing line {line_num}: {e}")
-                    continue
+            except json.JSONDecodeError as e:
+                # Skip malformed lines
+                logger.debug(f"Skipping malformed JSON at line {len(lines) - line_num + 1}: {e}")
+                continue
+            except Exception as e:
+                logger.debug(f"Error processing line {len(lines) - line_num + 1}: {e}")
+                continue
     
     except Exception as e:
         logger.error(f"Error reading transcript file: {e}")
         return None
     
-    if not last_assistant_message:
-        logger.warning(f"No assistant message found in transcript: {transcript_path}")
-    
-    return last_assistant_message
+    logger.warning(f"No assistant message found in transcript: {transcript_path}")
+    return None
 
 
 def extract_llm_metadata(assistant_message: Dict[str, Any]) -> Dict[str, Any]:
