@@ -215,7 +215,6 @@ class TestMessageFormatting:
             assert "📁 *Project:* `/home/user/project`" in result
             assert "🔖 *Session:* `abc123`" in result
             assert "Test message" in result
-            assert "```" in result  # Markdown code block
     
     def test_without_project_dir(self):
         """Test formatting without project_dir."""

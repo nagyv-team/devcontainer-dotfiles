@@ -248,12 +248,19 @@ def format_telegram_message(
     parts.append(f"")
     parts.append(f"💬 *Message:*")
     parts.append(f"")
-    parts.append(message_text)
+    
+    # Calculate remaining space for message (4096 char limit)
+    header = "\n".join(parts)
+    max_message_len = 4096 - len(header) - 10  # Leave room for truncation indicator
+    
+    # Truncate message if needed
+    if len(message_text) > max_message_len:
+        truncated_text = message_text[:max_message_len] + "...\n```"
+        parts.append(truncated_text)
+    else:
+        parts.append(message_text)
 
     formatted_message = "\n".join(parts)
-
-    # Truncate to message length (4096 char limit minus metadata)
-    truncated_message = formatted_message[:4096]
 
     if logger:
         logger.info(
