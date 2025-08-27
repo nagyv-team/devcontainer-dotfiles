@@ -48,14 +48,16 @@ class TestSaveUserPrompt:
         'CLAUDE_POSTGRES_SERVER_USER': 'testuser',
         'CLAUDE_POSTGRES_SERVER_PASS': 'testpass',
         'CLAUDE_POSTGRES_SERVER_DB_NAME': 'testdb'
-    })
+    }, clear=False)
     @patch('psycopg.connect')
     def test_get_postgres_connection_with_individual_vars(self, mock_connect):
         """Test PostgreSQL connection using individual environment variables"""
         mock_conn = Mock()
         mock_connect.return_value = mock_conn
         
-        result = get_postgres_connection()
+        # Clear DSN to ensure individual variables are used
+        with patch.dict(os.environ, {'CLAUDE_POSTGRES_SERVER_DSN': ''}, clear=False):
+            result = get_postgres_connection()
         
         # Verify connection was attempted with correct parameters
         mock_connect.assert_called_once()
@@ -123,7 +125,7 @@ class TestSaveUserPrompt:
         result = get_postgres_connection()
         assert result is None
     
-    @patch.dict(os.environ, {'CLAUDE_POSTGRES_SERVER_HOST_PORT': 'localhost'})
+    @patch.dict(os.environ, {'CLAUDE_POSTGRES_SERVER_HOST_PORT': 'localhost'}, clear=False)
     @patch('psycopg.connect')
     def test_get_postgres_connection_default_port(self, mock_connect):
         """Test default port 5432 is used when not specified"""
@@ -135,7 +137,9 @@ class TestSaveUserPrompt:
         os.environ['CLAUDE_POSTGRES_SERVER_PASS'] = 'pass'
         os.environ['CLAUDE_POSTGRES_SERVER_DB_NAME'] = 'db'
         
-        result = get_postgres_connection()
+        # Clear DSN to ensure individual variables are used
+        with patch.dict(os.environ, {'CLAUDE_POSTGRES_SERVER_DSN': ''}, clear=False):
+            result = get_postgres_connection()
         
         # Verify default port was used
         call_args = mock_connect.call_args[0][0]

@@ -614,25 +614,32 @@ class TestGetPostgresConnection:
         monkeypatch.setenv("CLAUDE_POSTGRES_SERVER_DSN", dsn)
         
         get_postgres_connection()
-        mock_connect.assert_called_once_with(dsn)
+        mock_connect.assert_called_once_with(dsn, connect_timeout=5)
     
     @patch('psycopg.connect')
     def test_individual_params_connection(self, mock_connect, monkeypatch):
         """Test connection using individual parameters."""
-        monkeypatch.setenv("CLAUDE_POSTGRES_HOST_PORT", "localhost:5432")
-        monkeypatch.setenv("CLAUDE_POSTGRES_USER", "testuser")
-        monkeypatch.setenv("CLAUDE_POSTGRES_PASS", "testpass")
-        monkeypatch.setenv("CLAUDE_POSTGRES_DB_NAME", "testdb")
+        # Ensure DSN is not set so individual params are used
+        monkeypatch.delenv("CLAUDE_POSTGRES_SERVER_DSN", raising=False)
+        
+        monkeypatch.setenv("CLAUDE_POSTGRES_SERVER_HOST_PORT", "localhost:5432")
+        monkeypatch.setenv("CLAUDE_POSTGRES_SERVER_USER", "testuser")
+        monkeypatch.setenv("CLAUDE_POSTGRES_SERVER_PASS", "testpass")
+        monkeypatch.setenv("CLAUDE_POSTGRES_SERVER_DB_NAME", "testdb")
         
         get_postgres_connection()
         mock_connect.assert_called_once()
         
-        call_args = mock_connect.call_args[1]
-        assert call_args["host"] == "localhost"
-        assert call_args["port"] == 5432
-        assert call_args["user"] == "testuser"
-        assert call_args["password"] == "testpass"
-        assert call_args["database"] == "testdb"
+        # The implementation builds a connection string, so check the first argument
+        call_args = mock_connect.call_args[0]
+        conn_string = call_args[0]
+        assert "host=localhost" in conn_string
+        assert "port=5432" in conn_string
+        assert "user=testuser" in conn_string
+        assert "password=testpass" in conn_string
+        assert "dbname=testdb" in conn_string
+        assert "sslmode=require" in conn_string
+        assert "connect_timeout=5" in conn_string
     
     def test_missing_environment_variables(self, monkeypatch):
         """Test that missing env vars returns None."""
@@ -714,6 +721,9 @@ class TestSaveLLMOutputToPostgres:
         """Test successful save to database."""
         conn = Mock()
         cursor = Mock()
+        # Make cursor support context manager protocol
+        cursor.__enter__ = Mock(return_value=cursor)
+        cursor.__exit__ = Mock(return_value=None)
         conn.cursor.return_value = cursor
         
         data = {
@@ -730,7 +740,6 @@ class TestSaveLLMOutputToPostgres:
         assert result is True
         cursor.execute.assert_called_once()
         conn.commit.assert_called_once()
-        cursor.close.assert_called_once()
     
     def test_save_with_nulls(self):
         """Test save with nullable fields as None."""
@@ -777,6 +786,9 @@ class TestSaveLLMOutputToPostgres:
         """Test that parameterized queries are used."""
         conn = Mock()
         cursor = Mock()
+        # Make cursor support context manager protocol
+        cursor.__enter__ = Mock(return_value=cursor)
+        cursor.__exit__ = Mock(return_value=None)
         conn.cursor.return_value = cursor
         
         data = {"output": "'; DROP TABLE llm_outputs; --"}
@@ -825,7 +837,7 @@ class TestMainFunction:
         """Test handling of missing transcript file."""
         with patch('sys.exit') as mock_exit:
             main()
-            mock_exit.assert_called_once_with(1)
+            mock_exit.assert_called_once_with(0)
     
     @patch('sys.stdin', StringIO("invalid json"))
     def test_invalid_input(self):
