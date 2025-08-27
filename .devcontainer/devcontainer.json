@@ -20,7 +20,7 @@
         "ghcr.io/jsburckhardt/devcontainer-features/ruff:1": {},
         "ghcr.io/nordcominc/devcontainer-features/android-sdk:1": {}
     },
-    "postCreateCommand": "bash .devcontainer/install_tools.sh",
+    "postCreateCommand": ".devcontainer/install_tools.sh",
     "shutdownAction": "none",
     "customizations": {
         "vscode": {
