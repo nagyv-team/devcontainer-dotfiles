@@ -426,19 +426,89 @@ def main():
     4. Establish database connection
     5. Save to PostgreSQL
     6. Handle errors appropriately (no fallback)
-    
-    TODO for task 3: Wire together all components
     """
-    # TODO for task 3: Implement main flow
-    # - Parse hook input
-    # - Extract transcript path and session_id
-    # - Read transcript file
-    # - Extract LLM metadata
-    # - Get repository info
-    # - Connect to database
-    # - Save to PostgreSQL
-    # - Handle all error cases
-    pass
+    try:
+        # Step 1: Parse hook input from stdin
+        logger.info("Starting LLM output save process")
+        hook_data = parse_hook_input()
+        
+        # Extract transcript path and session_id
+        transcript_path = hook_data.get('transcript_path')
+        session_id = hook_data.get('session_id')
+        cwd = hook_data.get('cwd')
+        
+        if not transcript_path:
+            logger.error("No transcript_path in hook data")
+            sys.exit(1)
+        
+        logger.debug(f"Processing transcript: {transcript_path}")
+        logger.debug(f"Session ID: {session_id}")
+        
+        # Step 2: Read transcript file and get last assistant message
+        assistant_message = read_transcript_file(transcript_path)
+        
+        if not assistant_message:
+            logger.info("No assistant message found in transcript, nothing to save")
+            sys.exit(0)
+        
+        # Step 3: Extract LLM output and metadata
+        llm_metadata = extract_llm_metadata(assistant_message)
+        
+        if not llm_metadata.get('output'):
+            logger.warning("No output text found in assistant message, nothing to save")
+            sys.exit(0)
+        
+        # Step 4: Get repository information from git context
+        repository = extract_repository_from_git(cwd)
+        logger.debug(f"Repository: {repository}")
+        
+        # Step 5: Prepare data for database
+        llm_data = {
+            'created_at': datetime.utcnow(),
+            'output': llm_metadata['output'],
+            'session_id': session_id,
+            'repository': repository,
+            'input_tokens': llm_metadata.get('input_tokens'),
+            'output_tokens': llm_metadata.get('output_tokens'),
+            'model': llm_metadata.get('model'),
+            'service_tier': llm_metadata.get('service_tier')
+        }
+        
+        # Step 6: Establish database connection
+        connection = get_postgres_connection()
+        
+        if not connection:
+            logger.error("Failed to establish PostgreSQL connection - no fallback mechanism")
+            sys.exit(1)
+        
+        try:
+            # Step 7: Save to PostgreSQL
+            success = save_llm_output_to_postgres(connection, llm_data)
+            
+            if not success:
+                logger.error("Failed to save LLM output to database")
+                sys.exit(1)
+            
+            logger.info("LLM output saved successfully")
+            sys.exit(0)
+            
+        finally:
+            # Always close the database connection
+            try:
+                connection.close()
+                logger.debug("Database connection closed")
+            except Exception as e:
+                logger.debug(f"Error closing connection: {e}")
+                
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON input: {e}")
+        sys.exit(1)
+    except ValueError as e:
+        logger.error(f"Invalid hook input: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Unexpected error in main: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
