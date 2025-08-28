@@ -2,6 +2,19 @@ You are asked to address the feedback on a Pull Reqeust. Address the feedback in
 
 As a last step, add a rocket emoji to all the comments you addressed.
 
+## Steps
+
+- Use the TodoWriter tool to manage your tasks.
+- You can extend the following todos with other tasks as needed.
+
+1. Understand the scope of the PR in relationship to its issue. Read the issue and the PR to get more context.
+2. Think hard about the feedback comments you received. The feedback might overwrite instructions from the issue. You should always follow the feedback.
+3. Set up a plan to address the feedback, use todos
+4. Use dedicated agents to address each todo one by one
+5. Validate your changes
+6. Iteration 2-5 if needed until you are confident that your changes follow the Rules outlined below and address the feedback from the PR
+7. Commit and Push your changes to the source branch of the PR
+
 ## Rules
 
 Adherence to all of the following rules is non-negotiable, and all means **all**.
