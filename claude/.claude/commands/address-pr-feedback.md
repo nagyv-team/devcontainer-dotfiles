@@ -13,3 +13,5 @@ Adherence to all of the following rules is non-negotiable, and all means **all**
   Optionally, post free-text updates to the PR as you are ready.
 - **Keep it minimal:**
   Most of the work is likely already done. Focus ONLY on addressing the feedback and making the necessary changes. Do not do anything more.
+- **Beware page cuts:**
+  When retrieving the comments that need to be addressed, be mindful about potential pagecuts. Always use paginated results and check for a potential next page.
