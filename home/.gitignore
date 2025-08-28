@@ -211,4 +211,6 @@ __marimo__/
 node_modules/
 
 # Claude Code
-settings.local.json
+.claude/settings.local.json
+.claude/current_prompt.md
+PROJECT_INDEX.json
