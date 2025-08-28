@@ -15,3 +15,5 @@ Adherence to all of the following rules is non-negotiable, and all means **all**
   Most of the work is likely already done. Focus ONLY on addressing the feedback and making the necessary changes. Do not do anything more.
 - **Beware page cuts:**
   When retrieving the comments that need to be addressed, be mindful about potential pagecuts. Always use paginated results and check for a potential next page.
+- **Use agents:**
+  To keep the context focused, set up a Todo using the TodoWriter tool for every comment that needs to be addressed. Use an agent to address them.
