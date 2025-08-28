@@ -1,0 +1,142 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Function to display usage
+usage() {
+    echo "Usage: $0 <PR_NUMBER>"
+    echo "Example: $0 12"
+    exit 1
+}
+
+# Function to log actions
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+# Function to handle errors
+error_exit() {
+    echo "[ERROR] $1" >&2
+    exit 1
+}
+
+# Check if PR number is provided
+if [ $# -ne 1 ]; then
+    usage
+fi
+
+PR_NUMBER=$1
+
+# Validate PR number is numeric
+if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+    error_exit "PR number must be numeric"
+fi
+
+log "Starting cleanup for PR #${PR_NUMBER}"
+
+# Check if gh CLI is available
+if ! command -v gh &> /dev/null; then
+    error_exit "GitHub CLI (gh) is not installed or not in PATH"
+fi
+
+# Check if git CLI is available
+if ! command -v git &> /dev/null; then
+    error_exit "Git CLI is not installed or not in PATH"
+fi
+
+# Check if we're in a git repository
+if ! git rev-parse --is-inside-work-tree &> /dev/null; then
+    error_exit "Not inside a Git repository"
+fi
+
+# Get PR information and extract source branch
+log "Fetching PR information..."
+PR_INFO=$(gh pr view "$PR_NUMBER" --json headRefName,state,url 2>/dev/null) || {
+    error_exit "Failed to fetch PR #${PR_NUMBER}. Please check if the PR exists and you have access."
+}
+
+SOURCE_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName')
+PR_STATE=$(echo "$PR_INFO" | jq -r '.state')
+PR_URL=$(echo "$PR_INFO" | jq -r '.url')
+
+if [ "$SOURCE_BRANCH" = "null" ] || [ -z "$SOURCE_BRANCH" ]; then
+    error_exit "Could not determine source branch for PR #${PR_NUMBER}"
+fi
+
+log "Found source branch: ${SOURCE_BRANCH}"
+log "PR state: ${PR_STATE}"
+log "PR URL: ${PR_URL}"
+
+# Warn if PR is already closed or merged
+if [ "$PR_STATE" != "OPEN" ]; then
+    log "WARNING: PR #${PR_NUMBER} is already ${PR_STATE}"
+    read -p "Do you want to continue with branch cleanup? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log "Cleanup cancelled by user"
+        exit 0
+    fi
+fi
+
+# Close the PR if it's still open
+if [ "$PR_STATE" = "OPEN" ]; then
+    log "Closing PR #${PR_NUMBER}..."
+    gh pr close "$PR_NUMBER" --comment "Closing PR and cleaning up branches" || {
+        error_exit "Failed to close PR #${PR_NUMBER}"
+    }
+    log "PR #${PR_NUMBER} closed successfully"
+fi
+
+# Switch to main branch
+log "Switching to main branch..."
+git checkout main || git checkout master || {
+    error_exit "Failed to switch to main/master branch"
+}
+
+# Remove any git worktrees with the source branch
+log "Checking for worktrees with branch ${SOURCE_BRANCH}..."
+WORKTREE_LIST=$(git worktree list --porcelain | grep -A2 "^worktree" | grep -B2 "branch refs/heads/${SOURCE_BRANCH}" | grep "^worktree" | cut -d' ' -f2- || true)
+
+if [ -n "$WORKTREE_LIST" ]; then
+    while IFS= read -r worktree_path; do
+        if [ -n "$worktree_path" ]; then
+            log "Removing worktree: ${worktree_path}"
+            git worktree remove "$worktree_path" --force || {
+                log "WARNING: Failed to remove worktree ${worktree_path}, trying to prune..."
+                git worktree prune
+            }
+        fi
+    done <<< "$WORKTREE_LIST"
+else
+    log "No worktrees found for branch ${SOURCE_BRANCH}"
+fi
+
+# Remove local source branch if it exists
+log "Checking if local branch ${SOURCE_BRANCH} exists..."
+if git show-ref --verify --quiet "refs/heads/${SOURCE_BRANCH}"; then
+    log "Removing local branch ${SOURCE_BRANCH}..."
+    git branch -D "${SOURCE_BRANCH}" || {
+        error_exit "Failed to remove local branch ${SOURCE_BRANCH}"
+    }
+    log "Local branch ${SOURCE_BRANCH} removed successfully"
+else
+    log "Local branch ${SOURCE_BRANCH} does not exist, skipping..."
+fi
+
+# Remove remote source branch from GitHub
+log "Removing remote branch ${SOURCE_BRANCH} from GitHub..."
+git push origin --delete "${SOURCE_BRANCH}" 2>/dev/null || {
+    log "WARNING: Failed to remove remote branch ${SOURCE_BRANCH} (may not exist or already deleted)"
+}
+
+# Clean up remote tracking references
+log "Pruning remote tracking references..."
+git remote prune origin
+
+log "Cleanup completed successfully!"
+log "Summary:"
+log "  - PR #${PR_NUMBER} closed"
+log "  - Local branch '${SOURCE_BRANCH}' removed"
+log "  - Remote branch '${SOURCE_BRANCH}' removed"
+log "  - Worktrees cleaned up"
+log "  - Remote references pruned"
