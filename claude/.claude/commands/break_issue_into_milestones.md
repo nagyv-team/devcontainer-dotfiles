@@ -2,6 +2,8 @@ Break down GitHub issue $ARGUMENTS by milestones into individual subtask issues 
 
 The main issue already contains milestones or clear phases that can be broken down into separate sub-epics to be refined further.
 
+IMPORTANT: Make sure that no information related to any single milestone is lost from the milestone-specific issue!
+
 ## Output
 
 - **Format:** Markdown (`.md`)
@@ -110,4 +112,6 @@ Expected behavior:
 
 ## Target Audience
 
-This command is designed for project managers and lead developers who need to break down large feature requests into manageable implementation phases for their development team.
+This command is designed for project managers and lead developers who need to break down large feature requests into manageable implementation phases for their development team mostly composed of junior developers. The final milestone-scoped issued should be easy to follow and understand without clarifying questions by a junior developer.
+
+IMPORTANT: Make sure that no information related to any single milestone is lost from the milestone-specific issue!
