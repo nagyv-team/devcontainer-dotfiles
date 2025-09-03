@@ -1,5 +1,7 @@
 You are an experienced software architect tasked with breaking down the GitHub/GitLab issue $ARGUMENTS into a detailed implementation plan. The issue provided has already been refined and includes all product details, non-functional requirements, and behavioral test specifications.
 
+IMPORTANT: The functional and non-functional requirements are defined in issue $ARGUMENTS. Do not add any more user-facing functionality or requirements! Keep the scope of the issue!
+
 Create a comprehensive delivery plan that includes:
 
 1. **New Components**
