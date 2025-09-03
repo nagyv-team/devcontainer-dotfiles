@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# DevSecOps Parallel Issue Task Processor
+# Usage: ./parallel-issue-tasks.sh <ISSUE_ID> <X>
+# Example: ./parallel-issue-tasks.sh 47 4
+
+set -euo pipefail
+
+# Validate arguments
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 path/to/task-X.md"
+    exit 1
+fi
+
+TASKFILE="$1"
+
+# We need the absolute path as we'll switch directory
+if [[ -f "$TASKFILE" ]]; then
+    # Get absolute path
+    ABSOLUTE_PATH=$(realpath "$TASKFILE")
+else
+    echo "Error: File '$TASKFILE' does not exist in current directory"
+    exit 1
+fi
+
+# Extract issue number
+temp=${TASKFILE#*issue-}  # Remove everything up to and including "issue-"
+ISSUE_ID=${temp%%/*}    # Remove everything from the first "/" onwards
+
+# Extract task number  
+temp=${TASKFILE##*task-}  # Remove everything up to and including "task-"
+TASK=${temp%.*}         # Remove the file extension
+
+# Validate inputs are numbers
+if ! [[ "$ISSUE_ID" =~ ^[0-9]+$ ]] || ! [[ "$TASK" =~ ^[0-9]+$ ]]; then
+    echo "Error: Both extracted arguments must be positive integers"
+    echo "  ISSUE_ID: $ISSUE_ID"
+    echo "  TASK: $TASK"
+    exit 1
+fi
+
+if [ "$TASK" -lt 1 ]; then
+    echo "Error: TASK must be at least 1"
+    exit 1
+fi
+
+# Function to process a single task
+process_task() {
+    local task_number=$1
+    local issue_id=$2
+    local taskfile=$3
+    local worktree_path="../issue-${issue_id}-task-${task_number}"
+    
+    echo "Task $task_number: Creating worktree $worktree_path"
+    
+    # Create git worktree
+    git worktree add -b issue-$issue_id-task-$task_number "$worktree_path" 2>/dev/null || {
+        echo "Task $task_number: Failed to create worktree $worktree_path"
+        return 1
+    }
+    
+    # Change to the worktree directory
+    cd "$worktree_path" || {
+        echo "Task $task_number: Failed to change directory to $worktree_path"
+        return 1
+    }
+    
+    echo "Task $task_number: Running claude-session in $worktree_path"
+    
+    # Run claude-session with the specified prompt
+    export CLAUDE_SESSION_ID=$(uuidgen) && claude --session-id $CLAUDE_SESSION_ID --dangerously-skip-permissions -p "/implement-task-with-minimal-context $taskfile" || {
+        echo "Task $task_number: claude-session failed"
+        return 1
+    }
+    
+    echo "Task $task_number: spawned successfully"
+}
+
+process_task "$TASK" "$ISSUE_ID" "$ABSOLUTE_PATH" &
+
+# Exit immediately - background processes continue
+exit 0
