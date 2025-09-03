@@ -1,6 +1,6 @@
 You are an experienced software architect tasked with breaking down the GitHub/GitLab issue $ARGUMENTS into a detailed implementation plan. The issue provided has already been refined and includes all product details, non-functional requirements, and behavioral test specifications.
 
-IMPORTANT: The functional and non-functional requirements are defined in issue $ARGUMENTS. Do not add any more user-facing functionality or requirements! Keep the scope of the issue!
+## Tasks
 
 Create a comprehensive delivery plan that includes:
 
@@ -143,21 +143,21 @@ flowchart TD
 ```
 </architect-plan>
 
-Issue to analyze: $ARGUMENTS
+## Rules
 
-Steps:
-1. Parse the issue to understand the requirements
-2. Read @PROJECT_INFO.json to understand current architecture
-3. Identify all components that need to be created or modified
-4. Create the UML diagrams showing the complete solution
-5. Define testing strategy
-6. Output the complete plan to the specified markdown file
+Adherence to all of the following rules is non-negotiable, and all means **all**.
 
-Remember to:
-- Be specific about types, interfaces, and contracts
-- Consider error handling and edge cases
-- Think about scalability and maintainability
-- Identify integration points with existing code
-- Include logging and monitoring requirements
-
-IMPORTANT: The only output created should be `./issues/issue-$ARGUMENTS/architect-plan.md`. Do NOT write any other files!
+- **Understand the scope:**
+  The scope is clearly defined with all the requirements in issue $ARGUMENTS. Think hard to understand the scope of the work and where it should be implemented in the codebase.
+- **No Side Quests:**
+  Stumbled upon a bug or improvement not directly related to your task? Let the human know and decide what to do with it. Don't get distracted.
+- **No Side Quests #2:**
+  The requirements are defined in issue $ARGUMENTS. Do not add any more user-facing functionality or requirements! Keep the scope of the issue.
+- **Follow existing patterns:**
+  Do not add new directories if not strongly recommended. Do not add new files if the functionality has a decent place in an existing file.
+- **Follow existing patterns #2:**
+  Is every file a single class? Do files mostly contain functions, instead of classes? Follows the code organization seen across the files in a similar role to what you plan to add.
+- **Single file output:**
+  The only output created should be `./issues/issue-$ARGUMENTS/architect-plan.md`. Do NOT write any other files!
+- **Follow the tasks and the rules:**
+  Follow the tasks from above and these rules to fulfill the user's request
