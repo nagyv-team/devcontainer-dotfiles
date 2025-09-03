@@ -197,6 +197,8 @@ Adherence to all of the following rules is non-negotiable, and all means **all**
   The only output created should be `./issues/issue-$ARGUMENTS/delivery-plan.md`. Do NOT write any other files!
 - **Follow the process and the rules:**
   Follow the process from above and these rules to fulfill the user's request
+- **London-school of TDD:**
+  Write tests within every task for the scope of the task. Mock out external methods following the London-school of TDD.
 
 ## Example Usage
 
