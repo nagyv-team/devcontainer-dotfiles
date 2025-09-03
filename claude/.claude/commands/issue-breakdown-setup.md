@@ -181,16 +181,32 @@ def process_receipt(receipt_data: ReceiptData) -> ProcessingResult:
     )
 ```
 
+## Rules
+
+Adherence to all of the following rules is non-negotiable, and all means **all**.
+
+- **Understand the scope:**
+  The scope is clearly defined with all the requirements in `./issues/issue-$ARGUMENTS/architect-plan.md`. Think hard to understand the scope of the work and where it should be implemented in the codebase.
+- **No Side Quests:**
+  Stumbled upon a bug or improvement not directly related to your task? Let the human know and decide what to do with it. Don't get distracted.
+- **No Side Quests #2:**
+  The requirements are defined in `./issues/issue-$ARGUMENTS/architect-plan.md`. Do not add any more user-facing functionality or requirements! Keep the scope of the issue.
+- **Follow the architect:**
+  Create, modify, remove files and methods only as described in the architect plan.
+- **Single file output:**
+  The only output created should be `./issues/issue-$ARGUMENTS/delivery-plan.md`. Do NOT write any other files!
+- **Follow the process and the rules:**
+  Follow the process from above and these rules to fulfill the user's request
+
 ## Example Usage
 
 ```bash
 # For issue #15 about receipt upload validation
-claude-code issue-breakdown-setup 15
+claude-code "/issue-breakdown-setup 15"
 ```
 
 This will:
 1. Create branch `issue-15`
 2. Read `./issues/issue-15/architect-plan.md`
 3. Create code skeletons based on the plan
-4. Generate `./issues/issue-15/delivery-plan.md`
-5. Output a summary of tasks and dependencies
+4. Generate `./issues/issue-15/delivery-plan.md` with a description of the tasks and dependencies
