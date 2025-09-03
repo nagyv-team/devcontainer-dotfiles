@@ -157,3 +157,5 @@ Remember to:
 - Think about scalability and maintainability
 - Identify integration points with existing code
 - Include logging and monitoring requirements
+
+IMPORTANT: The only output created should be `./issues/issue-$ARGUMENTS/architect-plan.md`. Do NOT write any other files!
