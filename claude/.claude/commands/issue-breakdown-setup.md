@@ -30,11 +30,7 @@ git checkout -b issue-$ARGUMENTS
 
 IMPORTANT: This is a crucial step to succesfully follow the user's instructions!
 
-Read and understand the architectural plan:
-
-```bash
-cat ./issues/issue-$ARGUMENTS/architect-plan.md
-```
+Read and understand the architectural plan @issues/issue-$ARGUMENTS/architect-plan.md
 
 Remember ALL the details:
 - Component structure and dependencies
