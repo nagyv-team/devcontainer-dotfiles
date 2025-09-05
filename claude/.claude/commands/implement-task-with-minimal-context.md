@@ -72,9 +72,10 @@ Before considering the task complete:
    ```bash
    git push -u origin {task-branch-name}
    ```
-3. **Create a Pull Request** targeting the issue branch (NOT main):
+3. **Create a Pull/Merge Request** targeting the issue branch:
    - Title: "Task {number}: {brief description}"
    - Description: List completed acceptance criteria
+   - Target branch: `issue-<issue number>`
    - **DO NOT MERGE** the PR
 
 ### 7. Task Boundaries
@@ -110,7 +111,7 @@ git add .
 git commit -m "Implement hook data service layer with filtering and pagination"
 git push -u origin issue-10-task-2
 
-# 7. Create PR via GitLab CLI
+# 7. Create PR/MR
 glab mr create --title "Task 2: Hook Data Service Implementation" \
   --description "Implemented service layer for hook data access with filtering" \
   --target-branch issue-10
