@@ -94,7 +94,7 @@ Generate `./issues/issue-$ARGUMENTS/delivery-plan.md` with:
 
 ## Task Breakdown
 
-#### Task 1: [Task Name]
+### Task 1: [Task Name]
 **Files**: `path/to/file.py`
 **Methods/Classes**: 
 - `ClassName.method_name()` - [Brief description]
@@ -106,26 +106,26 @@ Generate `./issues/issue-$ARGUMENTS/delivery-plan.md` with:
 
 **Estimated Time**: 4 hours
 
-#### Task 2: [Task Name]
+### Task 2: [Task Name]
 [Similar structure as Task 1]
 
-#### Task 3: [Task Name]
+### Task 3: [Task Name]
 
 [Task details...]
 
-#### Task 4: [Task Name]
+### Task 4: [Task Name]
 
 [Task details...]
 
-#### Task 5: [Task Name]
+### Task 5: [Task Name]
 
 [Task details for each...]
 
-#### Task 6: [Task Name]
+### Task 6: [Task Name]
 
 [Task details for each...]
 
-#### Task 7: [Task Name]
+### Task 7: [Task Name]
 
 [Task details for each...]
 
