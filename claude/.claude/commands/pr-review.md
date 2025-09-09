@@ -39,6 +39,7 @@ IMPORTANT: Following this process is non-negotiable. Your job depends on it.
 
 1. Understand the scope of the issue, and use a dedicated agent to check whether the code changes address the scope. No more, no less. To fulfill "Review Criteria 1" from above.
 2. Use the TodoWriter tool with dedicated agents to review every changed file in its own todo following the "Review Criteria 2-3" from above.
+3. Post your findings as a comment to the PR/MR
 
 ## Review Output Format
 
