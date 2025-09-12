@@ -13,23 +13,13 @@
     "ask": []
   },
   "hooks": {
-    "UserPromptSubmit": [
+    "PreToolUse": [
       {
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.venv_dotfiles/bin/python ${HOME}/.claude/scripts/save_user_prompt.py"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "jq -r .message | say"
+            "command": "~/bin/cc-hook-no-git-remote"
           }
         ]
       }
@@ -44,6 +34,16 @@
           {
             "type": "command",
             "command": "${HOME}/.venv_dotfiles/bin/python ${HOME}/.claude/scripts/save_llm_output.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/.venv_dotfiles/bin/python ${HOME}/.claude/scripts/save_user_prompt.py"
           }
         ]
       }
