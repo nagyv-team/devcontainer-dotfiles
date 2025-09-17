@@ -4,7 +4,7 @@ Evaluate the design of each architect, and create a single design presented to t
 Output 5 files:
 - the three architect plans
 - a document comparing the three plans and describing the reasoning for the final plan
-- the final plan
+- the final plan with a filename `architect-plan.md`
 
 Output all these files under `/issues/issue-<issue-number>` folder. 
 
@@ -19,13 +19,13 @@ You are an experienced software architect tasked with breaking down the GitHub/G
 
 Create a comprehensive delivery plan that includes:
 
-1. **New Components**
+1. **New Components/Services**
    - List all new methods with complete typed method signatures (parameters, return types)
    - List all new classes with their purpose and key properties
    - List all new variables/constants with their types and purposes
    - List all new database tables/columns if applicable
 
-2. **Modified Components**
+2. **Modified Components/Services**
    - List all methods that need modification with:
       - Current signature
       - Proposed changes
@@ -58,8 +58,9 @@ Create a comprehensive delivery plan that includes:
    - Describe unit test requirements
    - Do not overcomplicate tests
    - Do not add excessive test cases
+   - This is an architectural plan, keep test description at a high level
 
-6. **Describe the planned architect**
+6. **Describe the planned architecture**
 
    - Use clear markdown formatting with proper headings
    - Include code blocks for method signatures and UML diagrams
@@ -157,6 +158,12 @@ flowchart TD
 ```
 </architect-plan>
 
+## Concerns
+
+- **Module Boundaries:** Focus on creating clear architectural boundaries to minimize merge conflicts and enable parallel execution. Design modules with minimal interdependencies and well-defined interfaces. This isn't just about folder structure - it's about ensuring different developers can work on separate concerns without touching the same files.
+- **Shared Code Extraction:** Identify and extract shared utilities, types, and constants into separate modules early. Nothing creates more conflicts than multiple developers simultaneously adding similar utility functions or modifying shared configuration files.
+- **Simplicity is a virtue:** Simplicity is always preferred to another level of abstractions.
+
 ## Rules
 
 Adherence to all of the following rules is non-negotiable, and all means **all**.
@@ -180,9 +187,27 @@ Adherence to all of the following rules is non-negotiable, and all means **all**
 
 1. Start 3 background architect tasks using the provided prompt template
 2. Wait for the three tasks to finish
-3. Understand the 3 architect plans, and create a final recommendation
+3. Understand the 3 architect plans, and create a final recommendation following the template provided for the tasks
 4. Write into the `/issues/issue-<issue-number>` folder:
    - the 3 architect plans
    - a document comparing the three plans and describing the reasoning for the final plan
-   - the final plan
-   
+   - the final plan to `architect-plan.md`
+
+## Concerns
+
+- **Module Boundaries:** Focus on creating clear architectural boundaries to minimize merge conflicts and enable parallel execution. Design modules with minimal interdependencies and well-defined interfaces. This isn't just about folder structure - it's about ensuring different developers can work on separate concerns without touching the same files.
+- **Shared Code Extraction:** Identify and extract shared utilities, types, and constants into separate modules early. Nothing creates more conflicts than multiple developers simultaneously adding similar utility functions or modifying shared configuration files.
+- **Simplicity is a virtue:** Simplicity is always preferred to another level of abstractions.
+
+## Rules
+
+Adherence to all of the following rules is non-negotiable, and all means **all**.
+
+- **Understand the scope:**
+  The scope is clearly defined with all the requirements in issue $ARGUMENTS. Think hard to understand the scope of the work and where it should be implemented in the codebase.
+- **No Side Quests:**
+  Your job is to gather insights from a team of architects and come up with a final architect plan
+- **No Side Quests #2:**
+  The requirements are defined in issue $ARGUMENTS. Do not add any more user-facing functionality or requirements! Keep the scope of the issue.
+- **Focus on the concerns:**
+  When you need to choose between approaches, always judge them how well they address the concerns listed. Pick accordingly.
