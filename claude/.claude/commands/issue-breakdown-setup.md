@@ -85,6 +85,11 @@ Task criteria:
 - **Testability**: Can be tested independently
 - **Dependencies**: No coupling with other tasks
 
+IMPORTANT: Minimize merge conflicts by setting up tasks that adhere:
+
+- **Module Boundaries:** Focus on creating clear architectural boundaries to minimize merge conflicts and enable parallel execution. Design modules with minimal interdependencies and well-defined interfaces. This isn't just about folder structure - it's about ensuring different developers can work on separate concerns without touching the same files.
+- **Shared Code Extraction:** Identify and extract shared utilities, types, and constants into separate modules early. Nothing creates more conflicts than multiple developers simultaneously adding similar utility functions or modifying shared configuration files.
+
 ### 5. Create Delivery Plan
 
 Generate `./issues/issue-$ARGUMENTS/delivery-plan.md` with:
