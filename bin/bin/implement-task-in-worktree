@@ -54,7 +54,7 @@ process_task() {
     echo "Task $task_number: Creating worktree $worktree_path"
     
     # Create git worktree
-    git worktree add -b issue-$issue_id-task-$task_number "$worktree_path" 2>/dev/null || {
+    git worktree add -b tasks/issue-$issue_id-task-$task_number "$worktree_path" 2>/dev/null || {
         echo "Task $task_number: Failed to create worktree $worktree_path"
         return 1
     }
