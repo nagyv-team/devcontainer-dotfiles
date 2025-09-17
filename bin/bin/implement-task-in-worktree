@@ -1,35 +1,15 @@
 #!/bin/bash
-
-# DevSecOps Parallel Issue Task Processor
-# Usage: ./parallel-issue-tasks.sh <ISSUE_ID> <X>
-# Example: ./parallel-issue-tasks.sh 47 4
-
 set -euo pipefail
 
 # Validate arguments
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 path/to/task-X.md"
+if [ $# -ne 2 ]; then
+    echo "Work on a task in a separate git worktree with Claude Code"
+    echo "Usage: $0 <issue_id> <task_number>"
     exit 1
 fi
 
-TASKFILE="$1"
-
-# We need the absolute path as we'll switch directory
-if [[ -f "$TASKFILE" ]]; then
-    # Get absolute path
-    ABSOLUTE_PATH=$(realpath "$TASKFILE")
-else
-    echo "Error: File '$TASKFILE' does not exist in current directory"
-    exit 1
-fi
-
-# Extract issue number
-temp=${TASKFILE#*issue-}  # Remove everything up to and including "issue-"
-ISSUE_ID=${temp%%/*}    # Remove everything from the first "/" onwards
-
-# Extract task number  
-temp=${TASKFILE##*task-}  # Remove everything up to and including "task-"
-TASK=${temp%.*}         # Remove the file extension
+ISSUE_ID="$1"
+TASK="$2"
 
 # Validate inputs are numbers
 if ! [[ "$ISSUE_ID" =~ ^[0-9]+$ ]] || ! [[ "$TASK" =~ ^[0-9]+$ ]]; then
@@ -48,7 +28,6 @@ fi
 process_task() {
     local task_number=$1
     local issue_id=$2
-    local taskfile=$3
     local worktree_path="../issue-${issue_id}-task-${task_number}"
     
     echo "Task $task_number: Creating worktree $worktree_path"
@@ -68,7 +47,7 @@ process_task() {
     echo "Task $task_number: Running claude-session in $worktree_path"
     
     # Run claude-session with the specified prompt
-    export CLAUDE_SESSION_ID=$(uuidgen) && claude --session-id $CLAUDE_SESSION_ID --dangerously-skip-permissions -p "/implement-task-with-minimal-context $taskfile" || {
+    export CLAUDE_SESSION_ID=$(uuidgen) && claude --session-id $CLAUDE_SESSION_ID --dangerously-skip-permissions -p "/implement-task-with-minimal-context task $task_number of issue $issue_id" || {
         echo "Task $task_number: claude-session failed"
         return 1
     }
@@ -76,7 +55,7 @@ process_task() {
     echo "Task $task_number: spawned successfully"
 }
 
-process_task "$TASK" "$ISSUE_ID" "$ABSOLUTE_PATH" &
+process_task "$TASK" "$ISSUE_ID" &
 
 # Exit immediately - background processes continue
 exit 0
