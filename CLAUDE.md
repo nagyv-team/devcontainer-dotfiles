@@ -17,11 +17,12 @@ The repository is designed to be installed via DevPod, which runs `./install.sh`
 ## Project Structure
 
 - `bin/` - Shell scripts for setup and requirements management
-- `claude/.claude/` - Claude Code configuration files
-  - `agents/` - Custom agent definitions (python-backend-architect, bdd-test-engineer, react-native-architect)
+- `claude/.claude/` - Claude Code configuration files (git subtree from https://github.com/nagyv/claude-commands)
+  - `agents/` - Custom agent definitions
   - `commands/` - Custom slash commands for various workflows
-  - `scripts/` - Hook scripts (e.g., save_user_prompt.py, telegram_notify.py)
+  - `hooks/` - Hook scripts for integrations
   - `settings.json` - Hook configurations
+  - `skills/` - Custom skills
 - `docs/` - Documentation for features and integrations
   - `telegram-notifications.md` - Setup guide for Telegram notifications
 - `home/` - User home directory configurations
@@ -50,12 +51,19 @@ The repository is designed to be installed via DevPod, which runs `./install.sh`
 bash ./bin/copy_dotfiles.sh
 ```
 
-## Hook System
+## Updating claude/.claude/ from Upstream
 
-The repository configures Claude Code hooks via `claude/.claude/settings.json`:
-- UserPromptSubmit hook: Saves user prompts using `save_user_prompt.py`
-- Notification hook: Uses `say` command for audio notifications and sends Telegram notifications via `telegram_notify.py`
-- Stop hook: Sends Telegram notifications when sessions end using `telegram_notify.py`
+The `claude/.claude/` directory is managed as a git subtree. To pull updates from the upstream repository:
+
+```bash
+git subtree pull --prefix claude/.claude https://github.com/nagyv/claude-commands main --squash
+```
+
+To push changes back to the upstream repository (requires write access):
+
+```bash
+git subtree push --prefix claude/.claude https://github.com/nagyv/claude-commands main
+```
 
 ## Important Guidelines
 
